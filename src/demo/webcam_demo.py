@@ -70,14 +70,28 @@ class WebcamDemo:
         )
 
         self.classifier = create_classifier(model_type="rf")
-        if model_path is None:
-            model_path = "checkpoints/expression_model.joblib"
-        if model_path and os.path.exists(model_path):
-            try:
-                self.classifier.load(model_path)
-                print(f"Loaded trained model from {model_path}")
-            except Exception as e:
-                print(f"Could not load model: {e}. Using rule-based fallback.")
+
+        model_loaded = False
+        for candidate_path in [
+            model_path,
+            "checkpoints/expression_transformer.pt",
+            "checkpoints/expression_model.joblib",
+        ]:
+            if candidate_path and os.path.exists(candidate_path):
+                try:
+                    if candidate_path.endswith(".pt"):
+                        self.classifier = create_classifier(model_type="transformer", model_path=candidate_path)
+                    else:
+                        self.classifier = create_classifier(model_type="rf")
+                        self.classifier.load(candidate_path)
+                    print(f"Loaded trained model from {candidate_path}")
+                    model_loaded = True
+                    break
+                except Exception as e:
+                    print(f"Could not load {candidate_path}: {e}")
+
+        if not model_loaded:
+            print("No trained model found. Using rule-based fallback.")
 
         self.intent_mapper = create_mapper()
 
@@ -156,7 +170,8 @@ class WebcamDemo:
         result['features'] = features
         result['annotated_frame'] = annotated
 
-        expression = self.classifier.predict(features)
+        raw_lm = landmarks_obj.landmarks.flatten().tolist() if hasattr(landmarks_obj, 'landmarks') else None
+        expression = self.classifier.predict(features, raw_landmarks=raw_lm)
         result['expression'] = expression
 
         intent = self.intent_mapper.map_to_intent(expression)

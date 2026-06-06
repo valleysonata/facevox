@@ -69,13 +69,26 @@ class VideoThread(QThread):
         self.intent_mapper = create_mapper()
         self.occlusion_handler = RobustOcclusionHandler()
 
-        model_path = "checkpoints/expression_model.joblib"
-        if os.path.exists(model_path):
-            try:
-                self.classifier.load(model_path)
-                print(f"Loaded trained model from {model_path}")
-            except Exception:
-                print("No trained model found. Using rule-based fallback.")
+        model_loaded = False
+        for candidate_path in [
+            "checkpoints/expression_transformer.pt",
+            "checkpoints/expression_model.joblib",
+        ]:
+            if os.path.exists(candidate_path):
+                try:
+                    if candidate_path.endswith(".pt"):
+                        self.classifier = create_classifier(model_type="transformer", model_path=candidate_path)
+                    else:
+                        self.classifier = create_classifier(model_type="rf")
+                        self.classifier.load(candidate_path)
+                    print(f"Loaded trained model from {candidate_path}")
+                    model_loaded = True
+                    break
+                except Exception as e:
+                    print(f"Could not load {candidate_path}: {e}")
+
+        if not model_loaded:
+            print("No trained model found. Using rule-based fallback.")
 
     def run(self):
         self.running = True
@@ -130,7 +143,8 @@ class VideoThread(QThread):
         )
         result['occlusion'] = occlusion
 
-        expression = self.classifier.predict(features)
+        raw_lm = landmarks_obj.landmarks.flatten().tolist() if hasattr(landmarks_obj, 'landmarks') else None
+        expression = self.classifier.predict(features, raw_landmarks=raw_lm)
         result['expression'] = expression
 
         intent = self.intent_mapper.map_to_intent(expression)
@@ -393,12 +407,26 @@ class MainWindow(QMainWindow):
         self.status_bar.update_status(f"Switched to camera {camera_id}")
 
     def _on_model_load(self):
-        """Handle model load button."""
-        try:
-            self.video_thread.classifier.load("checkpoints/expression_model.joblib")
-            self.status_bar.update_status("Model loaded successfully")
-        except Exception as e:
-            self.status_bar.update_status(f"Error loading model: {e}")
+        model_loaded = False
+        for candidate_path in [
+            "checkpoints/expression_transformer.pt",
+            "checkpoints/expression_model.joblib",
+        ]:
+            if os.path.exists(candidate_path):
+                try:
+                    if candidate_path.endswith(".pt"):
+                        self.video_thread.classifier = create_classifier(
+                            model_type="transformer", model_path=candidate_path
+                        )
+                    else:
+                        self.video_thread.classifier.load(candidate_path)
+                    self.status_bar.update_status(f"Loaded model from {candidate_path}")
+                    model_loaded = True
+                    break
+                except Exception as e:
+                    self.status_bar.update_status(f"Error loading {candidate_path}: {e}")
+        if not model_loaded:
+            self.status_bar.update_status("No trained model found")
 
     def _on_reset(self):
         """Handle reset button."""

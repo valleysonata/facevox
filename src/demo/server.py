@@ -179,7 +179,7 @@ def _process_frame(frame: np.ndarray) -> ExpressionResponse:
         use_mask_adaptation=True,
     )
 
-    expression = classifier.predict(features)
+    expression = classifier.predict(features, raw_landmarks=landmarks_obj.landmarks.flatten().tolist())
 
     intent = intent_mapper.map_to_intent(expression)
 

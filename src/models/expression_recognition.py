@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
+
 class ExpressionLabel(Enum):
     NEUTRAL = "neutral"
     HAPPY = "happy"
@@ -377,10 +378,238 @@ class AssistiveExpressionMapper:
             features=features,
         )
 
-def create_classifier(model_type: str = "rf", **kwargs) -> ExpressionClassifier:
-    """Factory function to create expression classifier."""
+
+class TransformerClassifier:
+    def __init__(self, model_path=None, num_classes=7, input_dim=10, temporal_window=5):
+        self.temporal_window = temporal_window
+        self.prediction_history = deque(maxlen=temporal_window)
+        self.is_trained = False
+        self.num_classes = num_classes
+        self.input_dim = input_dim
+        self._model = None
+        self._device = 'cpu'
+        self._label_map = {
+            0: ExpressionLabel.NEUTRAL,
+            1: ExpressionLabel.HAPPY,
+            2: ExpressionLabel.SAD,
+            3: ExpressionLabel.SURPRISED,
+            4: ExpressionLabel.ANGRY,
+            5: ExpressionLabel.DISGUSTED,
+            6: ExpressionLabel.FEARFUL,
+        }
+        if model_path:
+            self.load(model_path)
+
+    def _ensure_model(self):
+        if self._model is not None:
+            return
+        import torch
+        from src.models.landmark_transformer import LandmarkTransformer
+        self._model = LandmarkTransformer(
+            input_dim=self.input_dim, num_classes=self.num_classes,
+        ).to(self._device)
+        self._model.eval()
+
+    def predict(self, features: Dict[str, float], raw_landmarks=None) -> ExpressionResult:
+        if not self.is_trained or self._model is None:
+            return self._predict_rules(features)
+
+        import torch
+
+        if raw_landmarks is not None and len(raw_landmarks) == self.input_dim:
+            x = np.array(raw_landmarks, dtype=np.float32)
+        else:
+            from src.models.expression_recognition import FeatureExtractor
+            x = np.array([features.get(name, 0.0) for name in FeatureExtractor.FEATURE_NAMES])
+
+        x_t = torch.tensor(x, dtype=torch.float32).unsqueeze(0).to(self._device)
+
+        with torch.no_grad():
+            logits = self._model(x_t)
+            probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+
+        prob_dict = {}
+        for i, prob in enumerate(probs):
+            label = self._label_map.get(i, ExpressionLabel.NEUTRAL)
+            prob_dict[label] = float(prob)
+
+        top_label = max(prob_dict, key=prob_dict.get)
+        top_conf = prob_dict[top_label]
+
+        self.prediction_history.append((top_label, top_conf))
+        if len(self.prediction_history) >= 3:
+            weights = np.linspace(0.5, 1.0, len(self.prediction_history))
+            vote_counts = {}
+            for (label, conf), w in zip(self.prediction_history, weights):
+                vote_counts[label] = vote_counts.get(label, 0) + w * conf
+            top_label = max(vote_counts, key=vote_counts.get)
+            top_conf = min(1.0, vote_counts[top_label] / sum(weights))
+
+        return ExpressionResult(
+            label=top_label,
+            confidence=top_conf,
+            probabilities=prob_dict,
+            features=features,
+        )
+
+    def _predict_rules(self, features):
+        mouth_open = features.get('mouth_open', 0)
+        mouth_width = features.get('mouth_width', 0)
+        ear_avg = features.get('ear_avg', 0)
+        left_brow = features.get('left_brow_height', 0)
+        right_brow = features.get('right_brow_height', 0)
+        brow_avg = (left_brow + right_brow) / 2
+        brow_diff = abs(left_brow - right_brow)
+        pitch = features.get('pitch', 0)
+        yaw = features.get('yaw', 0)
+
+        scores = {label: 0.0 for label in ExpressionLabel}
+
+        if ear_avg > 0.30 and mouth_open > 15 and brow_avg > 2.5:
+            scores[ExpressionLabel.SURPRISED] += 0.8
+            if ear_avg > 0.34:
+                scores[ExpressionLabel.SURPRISED] += 0.2
+
+        if mouth_width > 50 and mouth_open > 2:
+            smile_score = min(1.0, (mouth_width - 45) / 30)
+            scores[ExpressionLabel.HAPPY] += smile_score * 0.7
+            if ear_avg < 0.27:
+                scores[ExpressionLabel.HAPPY] += 0.15
+            if mouth_width > 55:
+                scores[ExpressionLabel.SURPRISED] *= 0.3
+
+        if mouth_width < 48 and brow_avg < 0.5:
+            scores[ExpressionLabel.SAD] += 0.6
+            if mouth_open < 5:
+                scores[ExpressionLabel.SAD] += 0.2
+
+        if brow_avg < -0.5:
+            anger_score = min(1.0, abs(brow_avg) / 3)
+            scores[ExpressionLabel.ANGRY] += anger_score * 0.7
+            if mouth_width < 50:
+                scores[ExpressionLabel.ANGRY] += 0.15
+
+        if brow_diff > 3.5 and abs(yaw) > 8:
+            scores[ExpressionLabel.CONFUSED] += 0.7
+
+        if brow_diff > 3.0 and abs(yaw) > 5:
+            scores[ExpressionLabel.THINKING] += 0.5
+
+        if ear_avg > 0.30 and mouth_open > 5 and mouth_open < 15 and brow_avg > 1.0:
+            scores[ExpressionLabel.FEARFUL] += 0.6
+
+        if mouth_open > 3 and mouth_open < 10 and brow_avg < 0.3 and brow_avg > -0.5:
+            scores[ExpressionLabel.DISGUSTED] += 0.5
+
+        if all(v < 0.3 for v in scores.values()):
+            scores[ExpressionLabel.NEUTRAL] = 0.5
+
+        if mouth_open < 5:
+            scores[ExpressionLabel.NEUTRAL] += 0.3
+        if -0.5 < brow_avg < 1.0:
+            scores[ExpressionLabel.NEUTRAL] += 0.2
+
+        total = sum(scores.values()) + 1e-6
+        prob_dict = {k: v / total for k, v in scores.items()}
+
+        top_label = max(prob_dict, key=prob_dict.get)
+        top_conf = prob_dict[top_label]
+
+        self.prediction_history.append((top_label, top_conf))
+        if len(self.prediction_history) >= 3:
+            weights = np.linspace(0.5, 1.0, len(self.prediction_history))
+            vote_counts = {}
+            for (label, conf), w in zip(self.prediction_history, weights):
+                vote_counts[label] = vote_counts.get(label, 0) + w * conf
+            top_label = max(vote_counts, key=vote_counts.get)
+            top_conf = min(1.0, vote_counts[top_label] / sum(weights))
+
+        return ExpressionResult(
+            label=top_label,
+            confidence=top_conf,
+            probabilities=prob_dict,
+            features=features,
+        )
+
+    def train(self, X, y):
+        import torch
+        from src.models.landmark_transformer import (
+            LandmarkTransformer, train_landmark_transformer, save_landmark_transformer,
+        )
+
+        unique_labels = np.unique(y)
+        self.num_classes = len(unique_labels)
+
+        label_remap = {old: new for new, old in enumerate(sorted(unique_labels))}
+        y_remap = np.array([label_remap[int(v)] for v in y])
+
+        n = len(X)
+        n_val = max(1, int(n * 0.2))
+        perm = np.random.permutation(n)
+        X_train, X_val = X[perm[n_val:]], X[perm[:n_val]]
+        y_train, y_val = y_remap[perm[n_val:]], y_remap[perm[:n_val]]
+
+        id_to_expr = {v.value: k for k, v in ExpressionLabel.__members__.items()}
+        self._label_map = {}
+        for old_label, new_id in label_remap.items():
+            expr_label = id_to_expr.get(str(old_label), None)
+            if expr_label is None:
+                for el in ExpressionLabel:
+                    if el.value == str(old_label):
+                        expr_label = el
+                        break
+            if expr_label is None:
+                expr_label = ExpressionLabel.NEUTRAL
+            self._label_map[new_id] = expr_label
+
+        model, val_acc = train_landmark_transformer(
+            X_train, y_train, X_val, y_val,
+            num_classes=self.num_classes,
+            epochs=50,
+            batch_size=64,
+            lr=1e-3,
+            device=self._device,
+            input_dim=X_train.shape[1],
+        )
+
+        self._model = model
+        self._model.eval()
+        self.is_trained = True
+        self.classes_ = sorted(unique_labels)
+
+    def save(self, path):
+        import torch
+        if self._model is not None:
+            torch.save({
+                'model_state_dict': self._model.state_dict(),
+                'input_dim': self.input_dim,
+                'num_classes': self.num_classes,
+                'label_map': {int(k): v for k, v in self._label_map.items()},
+                'is_trained': self.is_trained,
+            }, path)
+            print(f"Model saved to {path}")
+
+    def load(self, path):
+        import torch
+        try:
+            checkpoint = torch.load(path, map_location='cpu', weights_only=False)
+            self.num_classes = checkpoint.get('num_classes', 7)
+            self.input_dim = checkpoint.get('input_dim', 10)
+            self._label_map = {int(k): v for k, v in checkpoint.get('label_map', {}).items()}
+            self.is_trained = checkpoint.get('is_trained', True)
+            self._ensure_model()
+            self._model.load_state_dict(checkpoint['model_state_dict'])
+            self._model.eval()
+            self.classes_ = sorted(self._label_map.keys())
+        except Exception as e:
+            print(f"Could not load transformer model: {e}")
+            self.is_trained = False
+
+
+def create_classifier(model_type: str = "rf", **kwargs):
+    if model_type == "transformer":
+        return TransformerClassifier(**kwargs)
     return ExpressionClassifier(model_type=model_type, **kwargs)
 
 def create_mapper() -> AssistiveExpressionMapper:
-    """Factory function to create intent mapper."""
     return AssistiveExpressionMapper()

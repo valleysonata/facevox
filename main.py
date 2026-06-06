@@ -65,15 +65,15 @@ Examples:
     train_parser.add_argument("--subject", type=str, default=None, help="Subject name for capture (e.g. 'me', 'brother')")
     train_parser.add_argument(
         "--model-type",
-        choices=["rf", "gb"],
+        choices=["rf", "gb", "transformer"],
         default="rf",
-        help="Model type (rf=RandomForest, gb=GradientBoosting)",
+        help="Model type (rf=RandomForest, gb=GradientBoosting, transformer=LandmarkTransformer)",
     )
     train_parser.add_argument(
         "--model-path",
         type=str,
-        default="checkpoints/expression_model.joblib",
-        help="Model save path",
+        default=None,
+        help="Model save path (auto-selected based on model type)",
     )
 
     args = parser.parse_args()
@@ -136,7 +136,13 @@ Examples:
             print("\nTraining model...")
             metrics = trainer.train(X, y)
 
-            trainer.save(args.model_path)
+            if args.model_path:
+                save_path = args.model_path
+            elif args.model_type == "transformer":
+                save_path = "checkpoints/expression_transformer.pt"
+            else:
+                save_path = "checkpoints/expression_model.joblib"
+            trainer.save(save_path)
 
             with open("checkpoints/metrics.json", "w") as f:
                 json.dump(metrics, f, indent=2)

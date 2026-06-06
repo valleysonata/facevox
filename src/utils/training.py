@@ -147,6 +147,8 @@ class ExpressionDatasetBuilder:
 
                 if face_detected:
                     features = self.landmarker.extract_features(landmarks)
+                    raw_lm = landmarks.landmarks.flatten().tolist()
+                    features['_raw_landmarks'] = raw_lm
                     self.data.append(features)
                     self.labels.append(ASSISTIVE_LABELS[label])
                     captured += 1
@@ -333,12 +335,18 @@ class ExpressionTrainer:
         self.classifier = create_classifier(model_type=model_type)
 
     def prepare_data(self, dataset: ExpressionDatasetBuilder) -> Tuple[np.ndarray, np.ndarray]:
-        """Convert dataset to numpy arrays."""
-        X = np.array([
-            [d.get(name, 0.0) for name in FeatureExtractor.FEATURE_NAMES]
-            for d in dataset.data
-        ])
         y = np.array(dataset.labels)
+
+        has_raw = any('_raw_landmarks' in d for d in dataset.data)
+
+        if self.model_type == "transformer" and has_raw:
+            X = np.array([d['_raw_landmarks'] for d in dataset.data], dtype=np.float32)
+            print(f"Using raw landmarks: {X.shape[1]} features per sample")
+        else:
+            X = np.array([
+                [d.get(name, 0.0) for name in FeatureExtractor.FEATURE_NAMES]
+                for d in dataset.data
+            ])
         return X, y
 
     def train(
@@ -347,7 +355,6 @@ class ExpressionTrainer:
         y: np.ndarray,
         test_size: float = 0.2,
     ) -> Dict:
-        """Train the classifier and return metrics."""
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42, stratify=y
         )
@@ -356,10 +363,8 @@ class ExpressionTrainer:
         print(f"Test set: {len(X_test)} samples")
         print(f"Number of classes: {len(np.unique(y))}")
 
-        # Train
         self.classifier.train(X_train, y_train)
 
-        # Evaluate
         y_pred = []
         for x in X_test:
             features = dict(zip(FeatureExtractor.FEATURE_NAMES, x))
@@ -372,20 +377,24 @@ class ExpressionTrainer:
                     found = True
                     break
             if not found:
-                y_pred.append(0)  # default to neutral
+                y_pred.append(0)
 
         y_pred = np.array(y_pred)
 
-        # Cross-validation
-        cv_scores = cross_val_score(
-            self.classifier.clf,
-            X, y,
-            cv=5,
-            scoring='accuracy',
-            n_jobs=-1,
-        )
+        if self.model_type == "transformer":
+            cv_mean, cv_std = 0.0, 0.0
+        else:
+            cv_scores = cross_val_score(
+                self.classifier.clf,
+                X, y,
+                cv=min(5, min(np.bincount(y.astype(int))) if len(X) > 5 else 2),
+                scoring='accuracy',
+                n_jobs=-1,
+            )
+            cv_mean = float(cv_scores.mean())
+            cv_std = float(cv_scores.std())
 
-        unique_labels = sorted(np.unique(y))
+        unique_labels = sorted(np.unique(y_test))
         id_to_label = {v: k for k, v in ASSISTIVE_LABELS.items()}
         target_names = [id_to_label[l].value for l in unique_labels]
 
@@ -399,14 +408,15 @@ class ExpressionTrainer:
         cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
 
         metrics = {
-            'cv_mean': float(cv_scores.mean()),
-            'cv_std': float(cv_scores.std()),
+            'cv_mean': cv_mean,
+            'cv_std': cv_std,
             'classification_report': report,
             'confusion_matrix': cm.tolist(),
             'test_accuracy': float(np.mean(y_pred == y_test)),
+            'model_type': self.model_type,
         }
 
-        print(f"\nCross-validation accuracy: {metrics['cv_mean']:.3f} +/- {metrics['cv_std']:.3f}")
+        print(f"\nCross-validation accuracy: {cv_mean:.3f} +/- {cv_std:.3f}")
         print(f"Test accuracy: {metrics['test_accuracy']:.3f}")
         print("\nClassification Report:")
         print(classification_report(y_test, y_pred, labels=unique_labels, target_names=target_names))
@@ -429,8 +439,8 @@ def main():
     parser.add_argument("--mode", choices=["capture", "train", "evaluate"], default="train")
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic data")
     parser.add_argument("--samples", type=int, default=200, help="Samples per class")
-    parser.add_argument("--model-type", choices=["rf", "gb"], default="rf")
-    parser.add_argument("--model-path", type=str, default="checkpoints/expression_model.joblib")
+    parser.add_argument("--model-type", choices=["rf", "gb", "transformer"], default="rf")
+    parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--data-path", type=str, default="data/dataset.json")
     args = parser.parse_args()
 
@@ -452,7 +462,13 @@ def main():
         metrics = trainer.train(X, y)
 
         os.makedirs("checkpoints", exist_ok=True)
-        trainer.save(args.model_path)
+        if args.model_path:
+            save_path = args.model_path
+        elif args.model_type == "transformer":
+            save_path = "checkpoints/expression_transformer.pt"
+        else:
+            save_path = "checkpoints/expression_model.joblib"
+        trainer.save(save_path)
 
         with open("checkpoints/metrics.json", 'w') as f:
             json.dump(metrics, f, indent=2)
