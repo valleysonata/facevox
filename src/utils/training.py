@@ -9,13 +9,18 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
 import mediapipe as mp
 
-from src.models.face_landmarks import MediaPipeFaceLandmarker
+from src.models.face_landmarks import MediaPipeFaceLandmarker, normalize_landmarks
 from src.models.expression_recognition import (
     ExpressionClassifier,
     ExpressionLabel,
     FeatureExtractor,
     create_classifier,
 )
+
+def _normalize_raw_landmarks(raw_list):
+    lm = np.array(raw_list, dtype=np.float32).reshape(478, 3)
+    normed = normalize_landmarks(lm)
+    return normed.flatten().tolist()
 
 ASSISTIVE_LABELS = {
     ExpressionLabel.NEUTRAL: 0,
@@ -147,7 +152,7 @@ class ExpressionDatasetBuilder:
 
                 if face_detected:
                     features = self.landmarker.extract_features(landmarks)
-                    raw_lm = landmarks.landmarks.flatten().tolist()
+                    raw_lm = normalize_landmarks(landmarks.landmarks).flatten().tolist()
                     features['_raw_landmarks'] = raw_lm
                     self.data.append(features)
                     self.labels.append(ASSISTIVE_LABELS[label])
@@ -342,7 +347,12 @@ class ExpressionTrainer:
             filtered = [(d, l) for d, l in zip(dataset.data, dataset.labels) if '_raw_landmarks' in d]
             dataset.data = [d for d, _ in filtered]
             dataset.labels = [l for _, l in filtered]
-            X = np.array([d['_raw_landmarks'] for d in dataset.data], dtype=np.float32)
+            raw_data = [d['_raw_landmarks'] for d in dataset.data]
+            sample_len = len(raw_data[0])
+            if sample_len == 478 * 3:
+                raw_data = [_normalize_raw_landmarks(r) for r in raw_data]
+                print(f"Normalized raw landmarks from pixel coordinates")
+            X = np.array(raw_data, dtype=np.float32)
             print(f"Using raw landmarks: {X.shape[1]} features per sample ({len(X)} samples)")
         else:
             X = np.array([

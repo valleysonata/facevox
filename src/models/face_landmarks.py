@@ -235,6 +235,21 @@ class FaceLandmarkPipeline:
     def close(self):
         self.detector.close()
 
+def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
+    """Normalize 478x3 landmarks to be scale and position invariant.
+    
+    Centers on nose tip (landmark 1), scales by inter-eye distance (33 vs 263).
+    """
+    lm = landmarks.copy()
+    nose = lm[1].copy()
+    lm -= nose
+    left_eye = np.mean(lm[33:37], axis=0)
+    right_eye = np.mean(lm[263:267], axis=0)
+    eye_dist = np.linalg.norm(right_eye - left_eye)
+    if eye_dist > 1e-6:
+        lm /= eye_dist
+    return lm
+
 def create_pipeline(**kwargs) -> FaceLandmarkPipeline:
     """Factory function to create a face landmark pipeline."""
     return FaceLandmarkPipeline(**kwargs)

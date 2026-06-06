@@ -3,7 +3,7 @@ import time
 import os
 import numpy as np
 from typing import Optional
-from src.models.face_landmarks import FaceLandmarkPipeline
+from src.models.face_landmarks import FaceLandmarkPipeline, normalize_landmarks
 from src.models.expression_recognition import (
     ExpressionClassifier,
     AssistiveExpressionMapper,
@@ -171,7 +171,7 @@ class WebcamDemo:
         result['features'] = features
         result['annotated_frame'] = annotated
 
-        raw_lm = landmarks_obj.landmarks.flatten().tolist() if hasattr(landmarks_obj, 'landmarks') else None
+        raw_lm = normalize_landmarks(landmarks_obj.landmarks).flatten().tolist() if hasattr(landmarks_obj, 'landmarks') else None
         expression = self.classifier.predict(features, raw_landmarks=raw_lm)
         result['expression'] = expression
 

@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread
 from PyQt5.QtGui import QImage, QPixmap, QFont, QColor, QPalette
 
-from src.models.face_landmarks import FaceLandmarkPipeline
+from src.models.face_landmarks import FaceLandmarkPipeline, normalize_landmarks
 from src.models.expression_recognition import (
     ExpressionClassifier,
     AssistiveExpressionMapper,
@@ -145,7 +145,7 @@ class VideoThread(QThread):
         )
         result['occlusion'] = occlusion
 
-        raw_lm = landmarks_obj.landmarks.flatten().tolist() if hasattr(landmarks_obj, 'landmarks') else None
+        raw_lm = normalize_landmarks(landmarks_obj.landmarks).flatten().tolist() if hasattr(landmarks_obj, 'landmarks') else None
         expression = self.classifier.predict(features, raw_landmarks=raw_lm)
         result['expression'] = expression
 
