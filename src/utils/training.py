@@ -338,8 +338,9 @@ class ExpressionTrainer:
         y = np.array(dataset.labels)
 
         has_raw = any('_raw_landmarks' in d for d in dataset.data)
+        use_raw = self.model_type in ("transformer", "temporal", "occlusion_aware") and has_raw
 
-        if self.model_type == "transformer" and has_raw:
+        if use_raw:
             X = np.array([d['_raw_landmarks'] for d in dataset.data], dtype=np.float32)
             print(f"Using raw landmarks: {X.shape[1]} features per sample")
         else:
@@ -381,7 +382,7 @@ class ExpressionTrainer:
 
         y_pred = np.array(y_pred)
 
-        if self.model_type == "transformer":
+        if self.model_type in ("transformer", "temporal", "occlusion_aware"):
             cv_mean, cv_std = 0.0, 0.0
         else:
             cv_scores = cross_val_score(
@@ -439,7 +440,7 @@ def main():
     parser.add_argument("--mode", choices=["capture", "train", "evaluate"], default="train")
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic data")
     parser.add_argument("--samples", type=int, default=200, help="Samples per class")
-    parser.add_argument("--model-type", choices=["rf", "gb", "transformer"], default="rf")
+    parser.add_argument("--model-type", choices=["rf", "gb", "transformer", "temporal", "occlusion_aware"], default="rf")
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--data-path", type=str, default="data/dataset.json")
     args = parser.parse_args()
@@ -466,6 +467,10 @@ def main():
             save_path = args.model_path
         elif args.model_type == "transformer":
             save_path = "checkpoints/expression_transformer.pt"
+        elif args.model_type == "temporal":
+            save_path = "checkpoints/expression_temporal.pt"
+        elif args.model_type == "occlusion_aware":
+            save_path = "checkpoints/expression_occlusion.pt"
         else:
             save_path = "checkpoints/expression_model.joblib"
         trainer.save(save_path)

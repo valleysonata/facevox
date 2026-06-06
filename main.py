@@ -65,9 +65,9 @@ Examples:
     train_parser.add_argument("--subject", type=str, default=None, help="Subject name for capture (e.g. 'me', 'brother')")
     train_parser.add_argument(
         "--model-type",
-        choices=["rf", "gb", "transformer"],
+        choices=["rf", "gb", "transformer", "temporal", "occlusion_aware"],
         default="rf",
-        help="Model type (rf=RandomForest, gb=GradientBoosting, transformer=LandmarkTransformer)",
+        help="Model type (rf=RandomForest, gb=GradientBoosting, transformer=spatial, temporal=sequence, occlusion_aware=attention)",
     )
     train_parser.add_argument(
         "--model-path",
@@ -133,7 +133,7 @@ Examples:
 
             trainer = ExpressionTrainer(model_type=args.model_type)
             X, y = trainer.prepare_data(dataset)
-            print("\nTraining model...")
+            print(f"\nTraining model ({args.model_type})...")
             metrics = trainer.train(X, y)
 
             if args.model_path:

@@ -380,12 +380,13 @@ class AssistiveExpressionMapper:
 
 
 class TransformerClassifier:
-    def __init__(self, model_path=None, num_classes=7, input_dim=10, temporal_window=5):
+    def __init__(self, model_path=None, num_classes=7, input_dim=10, temporal_window=5, model_type="spatial"):
         self.temporal_window = temporal_window
         self.prediction_history = deque(maxlen=temporal_window)
         self.is_trained = False
         self.num_classes = num_classes
         self.input_dim = input_dim
+        self.model_type = model_type
         self._model = None
         self._device = 'cpu'
         self._label_map = {
@@ -404,10 +405,21 @@ class TransformerClassifier:
         if self._model is not None:
             return
         import torch
-        from src.models.landmark_transformer import LandmarkTransformer
-        self._model = LandmarkTransformer(
-            input_dim=self.input_dim, num_classes=self.num_classes,
-        ).to(self._device)
+        from src.models.landmark_transformer import (
+            LandmarkTransformer, TemporalExpressionTransformer, OcclusionAwareClassifier,
+        )
+        if self.model_type == "temporal":
+            self._model = TemporalExpressionTransformer(
+                input_dim=self.input_dim, num_classes=self.num_classes,
+            ).to(self._device)
+        elif self.model_type == "occlusion_aware":
+            self._model = OcclusionAwareClassifier(
+                input_dim=self.input_dim, num_classes=self.num_classes,
+            ).to(self._device)
+        else:
+            self._model = LandmarkTransformer(
+                input_dim=self.input_dim, num_classes=self.num_classes,
+            ).to(self._device)
         self._model.eval()
 
     def predict(self, features: Dict[str, float], raw_landmarks=None) -> ExpressionResult:
@@ -415,6 +427,7 @@ class TransformerClassifier:
             return self._predict_rules(features)
 
         import torch
+        from src.models.landmark_transformer import TemporalExpressionTransformer, OcclusionAwareClassifier
 
         if raw_landmarks is not None and len(raw_landmarks) == self.input_dim:
             x = np.array(raw_landmarks, dtype=np.float32)
@@ -425,7 +438,14 @@ class TransformerClassifier:
         x_t = torch.tensor(x, dtype=torch.float32).unsqueeze(0).to(self._device)
 
         with torch.no_grad():
-            logits = self._model(x_t)
+            if isinstance(self._model, TemporalExpressionTransformer):
+                logits = self._model.forward_online(x_t.squeeze(0))
+            elif isinstance(self._model, OcclusionAwareClassifier):
+                n_lm = self.input_dim // 3 if self.input_dim >= 3 else 478
+                vis = torch.ones(1, n_lm).to(self._device)
+                logits = self._model(x_t, vis)
+            else:
+                logits = self._model(x_t)
             probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
 
         prob_dict = {}
@@ -570,6 +590,7 @@ class TransformerClassifier:
             lr=1e-3,
             device=self._device,
             input_dim=X_train.shape[1],
+            model_type=self.model_type,
         )
 
         self._model = model
@@ -584,6 +605,7 @@ class TransformerClassifier:
                 'model_state_dict': self._model.state_dict(),
                 'input_dim': self.input_dim,
                 'num_classes': self.num_classes,
+                'model_type': self.model_type,
                 'label_map': {int(k): v for k, v in self._label_map.items()},
                 'is_trained': self.is_trained,
             }, path)
@@ -595,6 +617,7 @@ class TransformerClassifier:
             checkpoint = torch.load(path, map_location='cpu', weights_only=False)
             self.num_classes = checkpoint.get('num_classes', 7)
             self.input_dim = checkpoint.get('input_dim', 10)
+            self.model_type = checkpoint.get('model_type', 'spatial')
             self._label_map = {int(k): v for k, v in checkpoint.get('label_map', {}).items()}
             self.is_trained = checkpoint.get('is_trained', True)
             self._ensure_model()
@@ -607,8 +630,8 @@ class TransformerClassifier:
 
 
 def create_classifier(model_type: str = "rf", **kwargs):
-    if model_type == "transformer":
-        return TransformerClassifier(**kwargs)
+    if model_type in ("transformer", "temporal", "occlusion_aware"):
+        return TransformerClassifier(model_type=model_type, **kwargs)
     return ExpressionClassifier(model_type=model_type, **kwargs)
 
 def create_mapper() -> AssistiveExpressionMapper:

@@ -70,14 +70,16 @@ class VideoThread(QThread):
         self.occlusion_handler = RobustOcclusionHandler()
 
         model_loaded = False
-        for candidate_path in [
-            "checkpoints/expression_transformer.pt",
-            "checkpoints/expression_model.joblib",
+        for candidate_path, mtype in [
+            ("checkpoints/expression_occlusion.pt", "occlusion_aware"),
+            ("checkpoints/expression_temporal.pt", "temporal"),
+            ("checkpoints/expression_transformer.pt", "transformer"),
+            ("checkpoints/expression_model.joblib", "rf"),
         ]:
             if os.path.exists(candidate_path):
                 try:
                     if candidate_path.endswith(".pt"):
-                        self.classifier = create_classifier(model_type="transformer", model_path=candidate_path)
+                        self.classifier = create_classifier(model_type=mtype, model_path=candidate_path)
                     else:
                         self.classifier = create_classifier(model_type="rf")
                         self.classifier.load(candidate_path)
@@ -408,15 +410,17 @@ class MainWindow(QMainWindow):
 
     def _on_model_load(self):
         model_loaded = False
-        for candidate_path in [
-            "checkpoints/expression_transformer.pt",
-            "checkpoints/expression_model.joblib",
+        for candidate_path, mtype in [
+            ("checkpoints/expression_occlusion.pt", "occlusion_aware"),
+            ("checkpoints/expression_temporal.pt", "temporal"),
+            ("checkpoints/expression_transformer.pt", "transformer"),
+            ("checkpoints/expression_model.joblib", "rf"),
         ]:
             if os.path.exists(candidate_path):
                 try:
                     if candidate_path.endswith(".pt"):
                         self.video_thread.classifier = create_classifier(
-                            model_type="transformer", model_path=candidate_path
+                            model_type=mtype, model_path=candidate_path
                         )
                     else:
                         self.video_thread.classifier.load(candidate_path)

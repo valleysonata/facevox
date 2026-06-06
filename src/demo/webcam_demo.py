@@ -72,15 +72,16 @@ class WebcamDemo:
         self.classifier = create_classifier(model_type="rf")
 
         model_loaded = False
-        for candidate_path in [
-            model_path,
-            "checkpoints/expression_transformer.pt",
-            "checkpoints/expression_model.joblib",
+        for candidate_path, mtype in [
+            ("checkpoints/expression_occlusion.pt", "occlusion_aware"),
+            ("checkpoints/expression_temporal.pt", "temporal"),
+            ("checkpoints/expression_transformer.pt", "transformer"),
+            ("checkpoints/expression_model.joblib", "rf"),
         ]:
-            if candidate_path and os.path.exists(candidate_path):
+            if os.path.exists(candidate_path):
                 try:
                     if candidate_path.endswith(".pt"):
-                        self.classifier = create_classifier(model_type="transformer", model_path=candidate_path)
+                        self.classifier = create_classifier(model_type=mtype, model_path=candidate_path)
                     else:
                         self.classifier = create_classifier(model_type="rf")
                         self.classifier.load(candidate_path)
