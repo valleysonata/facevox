@@ -1,8 +1,6 @@
 
 # FaceVox (Work In Progress)
 
-Real-time facial expression recognition for assistive communication. Detects expressions via 478-point face landmarks (MediaPipe) and maps them to communication intents (YES/NO/HELP/PAIN) for users with motor disabilities.
-
 ## Setup
 
 ```bash
