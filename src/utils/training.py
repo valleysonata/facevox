@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import numpy as np
 import cv2
 from typing import List, Tuple, Dict, Optional
@@ -41,7 +42,6 @@ class ExpressionDatasetBuilder:
         self.labels = []
 
     def capture_interactive(self, samples_per_class: int = 50):
-        """Interactive capture from webcam with guided countdown."""
         if self.landmarker is None:
             print("Initializing face landmark detector...")
             self.landmarker = MediaPipeFaceLandmarker(
@@ -68,8 +68,7 @@ class ExpressionDatasetBuilder:
         print("  WEBCAM DATA CAPTURE")
         print("=" * 50)
         print(f"  Will capture {samples_per_class} samples per expression.")
-        print(f"  Each expression: 3s countdown + 5s capture.")
-        print(f"  Total: ~{len(expressions) * 8}s = ~{len(expressions) * 8 // 60}m {len(expressions) * 8 % 60}s")
+        print(f"  Each expression: 3s countdown + auto-capture.")
         print("  Press Q at any time to stop.")
         print("=" * 50)
         print()
@@ -78,29 +77,41 @@ class ExpressionDatasetBuilder:
             print(f"\n--- {name} ---")
             print(f"  {instruction}")
 
-            for countdown in range(3, 0, -1):
+            countdown_duration = 3.0
+            start_time = time.time()
+            while True:
+                elapsed = time.time() - start_time
+                remaining = countdown_duration - elapsed
+                if remaining <= 0:
+                    break
+
                 ret, frame = cap.read()
                 if not ret:
                     break
                 h, w = frame.shape[:2]
+
                 overlay = frame.copy()
                 cv2.rectangle(overlay, (0, 0), (w, h), (0, 0, 0), -1)
                 frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
+
                 cv2.putText(frame, name, (w // 2 - 100, h // 2 - 40),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 255), 3)
                 cv2.putText(frame, instruction, (w // 2 - 200, h // 2 + 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                cv2.putText(frame, str(countdown), (w // 2 - 20, h // 2 + 80),
+
+                num = str(int(remaining) + 1)
+                cv2.putText(frame, num, (w // 2 - 20, h // 2 + 80),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 200, 255), 3)
                 cv2.putText(frame, "Get ready...", (w // 2 - 80, h // 2 + 120),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+
                 cv2.imshow("Capture", frame)
-                if cv2.waitKey(1000) & 0xFF == ord('q'):
+                key = cv2.waitKey(30) & 0xFF
+                if key == ord('q'):
                     cap.release()
                     cv2.destroyAllWindows()
                     return
 
-            # Capture phase
             captured = 0
             failed = 0
             while captured < samples_per_class:
@@ -128,7 +139,7 @@ class ExpressionDatasetBuilder:
 
                 cv2.imshow("Capture", frame)
 
-                key = cv2.waitKey(1) & 0xFF
+                key = cv2.waitKey(30) & 0xFF
                 if key == ord('q'):
                     cap.release()
                     cv2.destroyAllWindows()
@@ -358,15 +369,18 @@ class ExpressionTrainer:
             n_jobs=-1,
         )
 
-        # Classification report
-        target_names = [label.value for label in ASSISTIVE_LABELS.keys()]
+        unique_labels = sorted(np.unique(y))
+        id_to_label = {v: k for k, v in ASSISTIVE_LABELS.items()}
+        target_names = [id_to_label[l].value for l in unique_labels]
+
         report = classification_report(
             y_test, y_pred,
+            labels=unique_labels,
             target_names=target_names,
             output_dict=True,
         )
 
-        cm = confusion_matrix(y_test, y_pred)
+        cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
 
         metrics = {
             'cv_mean': float(cv_scores.mean()),
@@ -376,10 +390,10 @@ class ExpressionTrainer:
             'test_accuracy': float(np.mean(y_pred == y_test)),
         }
 
-        print(f"\nCross-validation accuracy: {metrics['cv_mean']:.3f} ± {metrics['cv_std']:.3f}")
+        print(f"\nCross-validation accuracy: {metrics['cv_mean']:.3f} +/- {metrics['cv_std']:.3f}")
         print(f"Test accuracy: {metrics['test_accuracy']:.3f}")
         print("\nClassification Report:")
-        print(classification_report(y_test, y_pred, target_names=target_names))
+        print(classification_report(y_test, y_pred, labels=unique_labels, target_names=target_names))
 
         return metrics
 
