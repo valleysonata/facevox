@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="assets/banner.png" alt="FaceVox Banner" width="100%">
-</p>
 
 # FaceVox
 
