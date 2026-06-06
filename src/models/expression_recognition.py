@@ -569,18 +569,12 @@ class TransformerClassifier:
         X_train, X_val = X[perm[n_val:]], X[perm[:n_val]]
         y_train, y_val = y_remap[perm[n_val:]], y_remap[perm[:n_val]]
 
-        id_to_expr = {v.value: k for k, v in ExpressionLabel.__members__.items()}
+        id_to_label = {0: ExpressionLabel.NEUTRAL, 1: ExpressionLabel.HAPPY, 2: ExpressionLabel.SAD,
+                        3: ExpressionLabel.SURPRISED, 4: ExpressionLabel.ANGRY, 5: ExpressionLabel.DISGUSTED,
+                        6: ExpressionLabel.FEARFUL, 7: ExpressionLabel.CONFUSED, 8: ExpressionLabel.THINKING}
         self._label_map = {}
         for old_label, new_id in label_remap.items():
-            expr_label = id_to_expr.get(str(old_label), None)
-            if expr_label is None:
-                for el in ExpressionLabel:
-                    if el.value == str(old_label):
-                        expr_label = el
-                        break
-            if expr_label is None:
-                expr_label = ExpressionLabel.NEUTRAL
-            self._label_map[new_id] = expr_label
+            self._label_map[new_id] = id_to_label.get(int(old_label), ExpressionLabel.NEUTRAL)
 
         model, val_acc = train_landmark_transformer(
             X_train, y_train, X_val, y_val,
@@ -596,6 +590,7 @@ class TransformerClassifier:
         self._model = model
         self._model.eval()
         self.is_trained = True
+        self.input_dim = X_train.shape[1]
         self.classes_ = sorted(unique_labels)
 
     def save(self, path):

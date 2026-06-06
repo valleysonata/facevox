@@ -370,8 +370,11 @@ class ExpressionTrainer:
 
         y_pred = []
         for x in X_test:
-            features = dict(zip(FeatureExtractor.FEATURE_NAMES, x))
-            result = self.classifier.predict(features)
+            if self.model_type in ("transformer", "temporal", "occlusion_aware") and X.shape[1] > 20:
+                result = self.classifier.predict({}, raw_landmarks=x.tolist())
+            else:
+                features = dict(zip(FeatureExtractor.FEATURE_NAMES, x))
+                result = self.classifier.predict(features)
             label_name = result.label.value
             found = False
             for name, class_id in ASSISTIVE_LABELS.items():
