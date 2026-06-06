@@ -62,6 +62,7 @@ Examples:
     )
     train_parser.add_argument("--synthetic", action="store_true", help="Use synthetic data")
     train_parser.add_argument("--samples", type=int, default=200, help="Samples per class")
+    train_parser.add_argument("--subject", type=str, default=None, help="Subject name for capture (e.g. 'me', 'brother')")
     train_parser.add_argument(
         "--model-type",
         choices=["rf", "gb"],
@@ -117,7 +118,10 @@ Examples:
 
         if args.mode == "capture":
             dataset.capture_interactive(samples_per_class=args.samples)
-            dataset.save()
+            if args.subject:
+                dataset.save(f"dataset_{args.subject}.json")
+            else:
+                dataset.save()
 
         elif args.mode == "train":
             if args.synthetic:
@@ -125,7 +129,7 @@ Examples:
                 dataset.generate_synthetic(samples_per_class=args.samples)
                 dataset.save()
             else:
-                dataset.load()
+                dataset.merge_all()
 
             trainer = ExpressionTrainer(model_type=args.model_type)
             X, y = trainer.prepare_data(dataset)

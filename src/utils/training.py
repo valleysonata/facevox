@@ -289,7 +289,6 @@ class ExpressionDatasetBuilder:
                 self.labels.append(class_id)
 
     def save(self, filename: str = "dataset.json"):
-        """Save dataset to disk."""
         filepath = os.path.join(self.output_dir, filename)
         dataset = {
             'data': self.data,
@@ -301,13 +300,30 @@ class ExpressionDatasetBuilder:
         print(f"Dataset saved to {filepath}")
 
     def load(self, filename: str = "dataset.json"):
-        """Load dataset from disk."""
         filepath = os.path.join(self.output_dir, filename)
         with open(filepath, 'r') as f:
             dataset = json.load(f)
         self.data = dataset['data']
         self.labels = dataset['labels']
         print(f"Dataset loaded from {filepath}: {len(self.data)} samples")
+
+    def merge_all(self):
+        import glob
+        pattern = os.path.join(self.output_dir, "dataset*.json")
+        files = sorted(glob.glob(pattern))
+        if not files:
+            print(f"No dataset files found in {self.output_dir}/")
+            return
+        self.data = []
+        self.labels = []
+        for f in files:
+            with open(f, 'r') as fh:
+                dataset = json.load(fh)
+            self.data.extend(dataset['data'])
+            self.labels.extend(dataset['labels'])
+            name = os.path.basename(f)
+            print(f"  Loaded {name}: {len(dataset['data'])} samples")
+        print(f"Total: {len(self.data)} samples from {len(files)} file(s)")
 
 class ExpressionTrainer:
     """Train and evaluate expression classifier."""
