@@ -49,7 +49,7 @@ class WebcamDemo:
         self,
         model_path: Optional[str] = None,
         camera_id: int = 0,
-        window_name: str = "ORFormer-Lite: Facial Expression Recognition",
+        window_name: str = "FaceVox: Facial Expression Recognition",
         show_landmarks: bool = True,
         show_expression: bool = True,
         show_intent: bool = True,
@@ -269,7 +269,7 @@ class WebcamDemo:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="ORFormer-Lite Webcam Demo")
+    parser = argparse.ArgumentParser(description="FaceVox Webcam Demo")
     parser.add_argument("--model", type=str, default=None, help="Path to trained model")
     parser.add_argument("--camera", type=int, default=0, help="Camera ID")
     parser.add_argument("--no-landmarks", action="store_true", help="Hide landmarks")

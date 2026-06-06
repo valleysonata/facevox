@@ -129,7 +129,7 @@ def generate_banner(width=1280, height=640):
             font_title = ImageFont.load_default()
             font_sub = ImageFont.load_default()
 
-    title = "ORFormer-Lite"
+    title = "FaceVox"
     tagline = "Real-time Facial Expression Recognition for Assistive Communication"
 
     # title with shadow

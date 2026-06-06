@@ -21,7 +21,7 @@ from src.models.expression_recognition import (
 from src.models.occlusion import RobustOcclusionHandler
 
 app = FastAPI(
-    title="ORFormer-Lite API",
+    title="FaceVox API",
     description="Real-time facial expression recognition for assistive communication",
     version="1.0.0",
 )
@@ -82,7 +82,7 @@ async def shutdown():
 
 @app.get("/")
 async def root():
-    return {"message": "ORFormer-Lite API", "docs": "/docs"}
+    return {"message": "FaceVox API", "docs": "/docs"}
 
 @app.get("/health")
 async def health():

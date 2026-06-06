@@ -1,5 +1,5 @@
 """
-ORFormer-Lite: Real-Time Facial Expression Recognition for Assistive Communication
+FaceVox: Real-Time Facial Expression Recognition for Assistive Communication
 
 Main entry point for the application.
 """
@@ -10,7 +10,7 @@ import os
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ORFormer-Lite: Facial Expression Recognition",
+        description="FaceVox: Facial Expression Recognition",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

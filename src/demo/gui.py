@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ORFormer-Lite: Facial Expression Recognition")
+        self.setWindowTitle("FaceVox: Facial Expression Recognition")
         self.setMinimumSize(1200, 700)
 
         central = QWidget()
