@@ -335,19 +335,21 @@ class ExpressionTrainer:
         self.classifier = create_classifier(model_type=model_type)
 
     def prepare_data(self, dataset: ExpressionDatasetBuilder) -> Tuple[np.ndarray, np.ndarray]:
-        y = np.array(dataset.labels)
-
         has_raw = any('_raw_landmarks' in d for d in dataset.data)
         use_raw = self.model_type in ("transformer", "temporal", "occlusion_aware") and has_raw
 
         if use_raw:
+            filtered = [(d, l) for d, l in zip(dataset.data, dataset.labels) if '_raw_landmarks' in d]
+            dataset.data = [d for d, _ in filtered]
+            dataset.labels = [l for _, l in filtered]
             X = np.array([d['_raw_landmarks'] for d in dataset.data], dtype=np.float32)
-            print(f"Using raw landmarks: {X.shape[1]} features per sample")
+            print(f"Using raw landmarks: {X.shape[1]} features per sample ({len(X)} samples)")
         else:
             X = np.array([
                 [d.get(name, 0.0) for name in FeatureExtractor.FEATURE_NAMES]
                 for d in dataset.data
             ])
+        y = np.array(dataset.labels)
         return X, y
 
     def train(
