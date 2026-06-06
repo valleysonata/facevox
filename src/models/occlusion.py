@@ -2,14 +2,12 @@ import numpy as np
 from typing import Optional, Tuple, List
 from dataclasses import dataclass
 
-
 @dataclass
 class OcclusionEstimate:
     is_occluded: bool
     occlusion_ratio: float
     occluded_regions: List[str]
     confidence: float
-
 
 # Facial landmark regions
 FACE_REGIONS = {
@@ -33,7 +31,6 @@ REGION_CHECK = {
     'left_brow': list(range(46, 70)),
     'right_brow': list(range(276, 300)),
 }
-
 
 class OcclusionDetector:
     """Detect facial occlusions from landmark geometry and visibility."""
@@ -125,7 +122,6 @@ class OcclusionDetector:
             confidence=confidence,
         )
 
-
 class MaskOcclusionAdapter:
     """Adapt landmark estimation when face is partially occluded (e.g., mask)."""
 
@@ -200,7 +196,6 @@ class MaskOcclusionAdapter:
                 result[i] = np.sum(visible_positions[nearest_indices] * nearest_weights[:, np.newaxis], axis=0)
 
         return result
-
 
 class RobustOcclusionHandler:
     """Combined occlusion detection and adaptation."""

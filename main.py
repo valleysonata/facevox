@@ -8,7 +8,6 @@ import argparse
 import sys
 import os
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="ORFormer-Lite: Facial Expression Recognition",
@@ -144,7 +143,6 @@ Examples:
             trainer.load(args.model_path)
             X, y = trainer.prepare_data(dataset)
             metrics = trainer.train(X, y)
-
 
 if __name__ == "__main__":
     main()

@@ -13,7 +13,6 @@ from src.models.expression_recognition import (
 )
 from src.models.occlusion import RobustOcclusionHandler
 
-
 EXPRESSION_COLORS = {
     ExpressionLabel.NEUTRAL: (200, 200, 200),
     ExpressionLabel.HAPPY: (0, 255, 0),
@@ -43,7 +42,6 @@ INTENT_SYMBOLS = {
     ExpressionLabel.TIRED: "TIRED",
 }
 
-
 class WebcamDemo:
     """Real-time webcam facial expression recognition demo."""
 
@@ -63,7 +61,6 @@ class WebcamDemo:
         self.show_intent = show_intent
         self.show_fps = show_fps
 
-        # Initialize pipeline
         self.face_pipeline = FaceLandmarkPipeline(
             static_image_mode=False,
             max_num_faces=1,
@@ -72,9 +69,7 @@ class WebcamDemo:
             min_tracking_confidence=0.5,
         )
 
-        # Initialize expression classifier
         self.classifier = create_classifier(model_type="rf")
-        # Auto-load from default path if not specified
         if model_path is None:
             model_path = "checkpoints/expression_model.joblib"
         if model_path and os.path.exists(model_path):
@@ -84,17 +79,14 @@ class WebcamDemo:
             except Exception as e:
                 print(f"Could not load model: {e}. Using rule-based fallback.")
 
-        # Initialize intent mapper
         self.intent_mapper = create_mapper()
 
         # Occlusion handler
         self.occlusion_handler = RobustOcclusionHandler()
 
-        # Camera
         self.camera_id = camera_id
         self.cap = None
 
-        # FPS tracking
         self.fps_history = []
         self.last_time = time.time()
 
@@ -113,24 +105,19 @@ class WebcamDemo:
                 print("Error: Could not read frame")
                 break
 
-            # Process frame
             start_time = time.time()
             result = self._process_frame(frame)
             processing_time = time.time() - start_time
 
-            # Calculate FPS
             self.fps_history.append(1.0 / max(processing_time, 1e-6))
             if len(self.fps_history) > 30:
                 self.fps_history.pop(0)
             fps = np.mean(self.fps_history)
 
-            # Draw UI
             display = self._draw_ui(frame, result, fps)
 
-            # Show
             cv2.imshow(self.window_name, display)
 
-            # Handle keys
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
@@ -152,7 +139,6 @@ class WebcamDemo:
             'features': None,
         }
 
-        # Get face landmarks
         face_result = self.face_pipeline.process_and_extract(frame)
         if face_result is None:
             return result
@@ -161,7 +147,6 @@ class WebcamDemo:
         features = face_result['features']
         annotated = face_result['annotated_frame']
 
-        # Handle occlusion
         adapted_landmarks, occlusion = self.occlusion_handler.process(
             landmarks_obj.landmarks,
             use_mask_adaptation=True,
@@ -171,11 +156,9 @@ class WebcamDemo:
         result['features'] = features
         result['annotated_frame'] = annotated
 
-        # Classify expression
         expression = self.classifier.predict(features)
         result['expression'] = expression
 
-        # Map to intent
         intent = self.intent_mapper.map_to_intent(expression)
         result['intent'] = intent
 
@@ -186,7 +169,6 @@ class WebcamDemo:
         display = result['annotated_frame'].copy()
         h, w = display.shape[:2]
 
-        # FPS counter
         if self.show_fps:
             cv2.putText(
                 display,
@@ -198,7 +180,6 @@ class WebcamDemo:
                 2,
             )
 
-        # Expression display
         if self.show_expression and result['expression']:
             expr = result['expression']
             color = EXPRESSION_COLORS.get(expr.label, (255, 255, 255))
@@ -219,14 +200,12 @@ class WebcamDemo:
                 cv2.putText(display, prob_text, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
                 y_offset += 25
 
-        # Intent display (assistive)
         if self.show_intent and result['intent']:
             intent = result['intent']
             if intent.label in INTENT_SYMBOLS:
                 symbol = INTENT_SYMBOLS[intent.label]
                 color = EXPRESSION_COLORS.get(intent.label, (255, 255, 255))
 
-                # Draw intent box
                 box_x = w - 200
                 box_y = 20
                 box_w = 180
@@ -251,7 +230,6 @@ class WebcamDemo:
                     1,
                 )
 
-        # Occlusion indicator
         if result['occlusion'] and result['occlusion'].is_occluded:
             cv2.putText(
                 display,
@@ -263,7 +241,6 @@ class WebcamDemo:
                 1,
             )
 
-        # Instructions
         cv2.putText(
             display,
             "q: quit | s: screenshot | r: reset intent",
@@ -290,7 +267,6 @@ class WebcamDemo:
         cv2.destroyAllWindows()
         self.face_pipeline.close()
 
-
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="ORFormer-Lite Webcam Demo")
@@ -309,7 +285,6 @@ def main():
         show_intent=not args.no_intent,
     )
     demo.start()
-
 
 if __name__ == "__main__":
     main()

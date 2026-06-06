@@ -20,7 +20,6 @@ from src.models.expression_recognition import (
 )
 from src.models.occlusion import RobustOcclusionHandler
 
-
 app = FastAPI(
     title="ORFormer-Lite API",
     description="Real-time facial expression recognition for assistive communication",
@@ -35,13 +34,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Global state
 face_pipeline: Optional[FaceLandmarkPipeline] = None
 classifier: Optional[ExpressionClassifier] = None
 intent_mapper: Optional[AssistiveExpressionMapper] = None
 occlusion_handler: Optional[RobustOcclusionHandler] = None
-
 
 class ExpressionResponse(BaseModel):
     expression: str
@@ -51,14 +47,11 @@ class ExpressionResponse(BaseModel):
     occluded: bool
     features: dict
 
-
 class BatchRequest(BaseModel):
     frames: list  # base64 encoded images
 
-
 class BatchResponse(BaseModel):
     results: list
-
 
 @app.on_event("startup")
 async def startup():
@@ -82,17 +75,14 @@ async def startup():
     occlusion_handler = RobustOcclusionHandler()
     print("Server started successfully")
 
-
 @app.on_event("shutdown")
 async def shutdown():
     if face_pipeline:
         face_pipeline.close()
 
-
 @app.get("/")
 async def root():
     return {"message": "ORFormer-Lite API", "docs": "/docs"}
-
 
 @app.get("/health")
 async def health():
@@ -101,7 +91,6 @@ async def health():
         "model_loaded": classifier.is_trained if classifier else False,
     }
 
-
 @app.post("/predict", response_model=ExpressionResponse)
 async def predict(base64_image: str):
     """Predict expression from base64 encoded image."""
@@ -109,7 +98,6 @@ async def predict(base64_image: str):
         raise HTTPException(status_code=503, detail="Server not initialized")
 
     try:
-        # Decode image
         img_data = base64.b64decode(base64_image)
         nparr = np.frombuffer(img_data, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -117,13 +105,11 @@ async def predict(base64_image: str):
         if frame is None:
             raise HTTPException(status_code=400, detail="Invalid image")
 
-        # Process
         result = _process_frame(frame)
         return result
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/predict/batch", response_model=BatchResponse)
 async def predict_batch(request: BatchRequest):
@@ -147,7 +133,6 @@ async def predict_batch(request: BatchRequest):
 
     return BatchResponse(results=results)
 
-
 @app.get("/expressions")
 async def list_expressions():
     """List all supported expressions."""
@@ -163,7 +148,6 @@ async def list_expressions():
         },
     }
 
-
 @app.get("/stats")
 async def stats():
     """Get server statistics."""
@@ -173,7 +157,6 @@ async def stats():
         "features": 10,
         "temporal_window": 30,
     }
-
 
 def _process_frame(frame: np.ndarray) -> ExpressionResponse:
     """Process a single frame."""
@@ -191,16 +174,13 @@ def _process_frame(frame: np.ndarray) -> ExpressionResponse:
     landmarks_obj = face_result['landmarks']
     features = face_result['features']
 
-    # Handle occlusion
     adapted_landmarks, occlusion = occlusion_handler.process(
         landmarks_obj.landmarks,
         use_mask_adaptation=True,
     )
 
-    # Classify expression
     expression = classifier.predict(features)
 
-    # Map to intent
     intent = intent_mapper.map_to_intent(expression)
 
     return ExpressionResponse(
@@ -212,11 +192,9 @@ def _process_frame(frame: np.ndarray) -> ExpressionResponse:
         features=features,
     )
 
-
 def run_server(host: str = "0.0.0.0", port: int = 8000):
     """Run the API server."""
     uvicorn.run(app, host=host, port=port)
-
 
 if __name__ == "__main__":
     run_server()

@@ -16,8 +16,6 @@ from src.models.expression_recognition import (
     create_classifier,
 )
 
-
-# Expression labels for assistive communication
 ASSISTIVE_LABELS = {
     ExpressionLabel.NEUTRAL: 0,
     ExpressionLabel.HAPPY: 1,    # YES
@@ -31,7 +29,6 @@ ASSISTIVE_LABELS = {
 }
 
 NUM_CLASSES = len(ASSISTIVE_LABELS)
-
 
 class ExpressionDatasetBuilder:
     """Build dataset from webcam captures or synthetic data."""
@@ -57,7 +54,6 @@ class ExpressionDatasetBuilder:
             print("Error: Could not open camera")
             return
 
-        # Define capture order with instructions
         expressions = [
             (ExpressionLabel.NEUTRAL, "NEUTRAL", "Relax your face. Don't make any expression."),
             (ExpressionLabel.HAPPY, "HAPPY", "Smile naturally! Show teeth if you can."),
@@ -82,23 +78,18 @@ class ExpressionDatasetBuilder:
             print(f"\n--- {name} ---")
             print(f"  {instruction}")
 
-            # Countdown phase (3 seconds)
             for countdown in range(3, 0, -1):
                 ret, frame = cap.read()
                 if not ret:
                     break
                 h, w = frame.shape[:2]
-                # Dark overlay
                 overlay = frame.copy()
                 cv2.rectangle(overlay, (0, 0), (w, h), (0, 0, 0), -1)
                 frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
-                # Expression name
                 cv2.putText(frame, name, (w // 2 - 100, h // 2 - 40),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 255), 3)
-                # Instruction
                 cv2.putText(frame, instruction, (w // 2 - 200, h // 2 + 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                # Countdown number
                 cv2.putText(frame, str(countdown), (w // 2 - 20, h // 2 + 80),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 200, 255), 3)
                 cv2.putText(frame, "Get ready...", (w // 2 - 80, h // 2 + 120),
@@ -120,7 +111,6 @@ class ExpressionDatasetBuilder:
                 landmarks = self.landmarker.process(frame)
                 face_detected = landmarks is not None
 
-                # Draw face status indicator
                 h, w = frame.shape[:2]
                 status_color = (0, 255, 0) if face_detected else (0, 0, 255)
                 status_text = "Face OK" if face_detected else "No face detected!"
@@ -128,12 +118,10 @@ class ExpressionDatasetBuilder:
                 cv2.putText(frame, status_text, (50, 36),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
 
-                # Top bar
                 cv2.rectangle(frame, (0, 0), (w, 60), (40, 40, 40), -1)
                 cv2.putText(frame, f"{name} ({captured}/{samples_per_class})",
                             (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-                # Progress bar
                 bar_w = int((captured / samples_per_class) * (w - 20))
                 cv2.rectangle(frame, (10, h - 30), (10 + bar_w, h - 10), (0, 200, 0), -1)
                 cv2.rectangle(frame, (10, h - 30), (w - 10, h - 10), (100, 100, 100), 1)
@@ -146,7 +134,6 @@ class ExpressionDatasetBuilder:
                     cv2.destroyAllWindows()
                     return
 
-                # Auto-capture when face detected
                 if face_detected:
                     features = self.landmarker.extract_features(landmarks)
                     self.data.append(features)
@@ -311,7 +298,6 @@ class ExpressionDatasetBuilder:
         self.labels = dataset['labels']
         print(f"Dataset loaded from {filepath}: {len(self.data)} samples")
 
-
 class ExpressionTrainer:
     """Train and evaluate expression classifier."""
 
@@ -351,10 +337,7 @@ class ExpressionTrainer:
         for x in X_test:
             features = dict(zip(FeatureExtractor.FEATURE_NAMES, x))
             result = self.classifier.predict(features)
-            # Convert label back to class_id
-            # result.label is an ExpressionLabel enum
             label_name = result.label.value
-            # Find matching class_id
             found = False
             for name, class_id in ASSISTIVE_LABELS.items():
                 if name.value == label_name:
@@ -410,7 +393,6 @@ class ExpressionTrainer:
         self.classifier.load(path)
         print(f"Model loaded from {path}")
 
-
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Train Expression Classifier")
@@ -442,7 +424,6 @@ def main():
         os.makedirs("checkpoints", exist_ok=True)
         trainer.save(args.model_path)
 
-        # Save metrics
         with open("checkpoints/metrics.json", 'w') as f:
             json.dump(metrics, f, indent=2)
 
@@ -452,7 +433,6 @@ def main():
         trainer.load(args.model_path)
         X, y = trainer.prepare_data(dataset)
         metrics = trainer.train(X, y)
-
 
 if __name__ == "__main__":
     main()

@@ -22,7 +22,6 @@ from src.models.expression_recognition import (
 )
 from src.models.occlusion import RobustOcclusionHandler
 
-
 EXPRESSION_COLORS = {
     ExpressionLabel.NEUTRAL: QColor(200, 200, 200),
     ExpressionLabel.HAPPY: QColor(0, 255, 0),
@@ -52,7 +51,6 @@ INTENT_LABELS = {
     ExpressionLabel.TIRED: "TIRED",
 }
 
-
 class VideoThread(QThread):
     """Thread for video capture and processing."""
     frame_ready = pyqtSignal(np.ndarray, dict)
@@ -71,7 +69,6 @@ class VideoThread(QThread):
         self.intent_mapper = create_mapper()
         self.occlusion_handler = RobustOcclusionHandler()
 
-        # Try to load trained model
         model_path = "checkpoints/expression_model.joblib"
         if os.path.exists(model_path):
             try:
@@ -96,7 +93,6 @@ class VideoThread(QThread):
             if not ret:
                 continue
 
-            # Process frame
             start_time = time.time()
             result = self._process_frame(frame)
             processing_time = time.time() - start_time
@@ -128,22 +124,18 @@ class VideoThread(QThread):
         features = face_result['features']
         result['features'] = features
 
-        # Handle occlusion
         adapted_landmarks, occlusion = self.occlusion_handler.process(
             landmarks_obj.landmarks,
             use_mask_adaptation=True,
         )
         result['occlusion'] = occlusion
 
-        # Classify expression
         expression = self.classifier.predict(features)
         result['expression'] = expression
 
-        # Map to intent
         intent = self.intent_mapper.map_to_intent(expression)
         result['intent'] = intent
 
-        # Draw landmarks
         result['annotated_frame'] = self.face_pipeline.detector.draw_landmarks(
             frame.copy(),
             landmarks_obj,
@@ -156,7 +148,6 @@ class VideoThread(QThread):
         self.running = False
         self.face_pipeline.close()
 
-
 class ExpressionWidget(QFrame):
     """Widget to display expression information."""
 
@@ -167,31 +158,26 @@ class ExpressionWidget(QFrame):
 
         layout = QVBoxLayout(self)
 
-        # Title
         title = QLabel("EXPRESSION")
         title.setFont(QFont("Arial", 14, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # Expression label
         self.expression_label = QLabel("--")
         self.expression_label.setFont(QFont("Arial", 24, QFont.Bold))
         self.expression_label.setAlignment(Qt.AlignCenter)
         self.expression_label.setStyleSheet("color: white;")
         layout.addWidget(self.expression_label)
 
-        # Confidence bar
         self.confidence_bar = QProgressBar()
         self.confidence_bar.setRange(0, 100)
         self.confidence_bar.setValue(0)
         layout.addWidget(self.confidence_bar)
 
-        # Confidence text
         self.confidence_label = QLabel("Confidence: 0.00")
         self.confidence_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.confidence_label)
 
-        # Probabilities grid
         prob_group = QGroupBox("Probabilities")
         prob_layout = QGridLayout()
         self.prob_labels = {}
@@ -217,20 +203,16 @@ class ExpressionWidget(QFrame):
             self.confidence_label.setText("Confidence: 0.00")
             return
 
-        # Update expression label
         color = EXPRESSION_COLORS.get(expression.label, QColor(255, 255, 255))
         self.expression_label.setText(expression.label.value.upper())
         self.expression_label.setStyleSheet(f"color: {color.name()};")
 
-        # Update confidence
         self.confidence_bar.setValue(int(expression.confidence * 100))
         self.confidence_label.setText(f"Confidence: {expression.confidence:.2f}")
 
-        # Update probabilities
         for label, prob in expression.probabilities.items():
             if label in self.prob_labels:
                 self.prob_labels[label].setText(f"{label.value}: {prob:.2f}")
-
 
 class IntentWidget(QFrame):
     """Widget to display intent information."""
@@ -243,13 +225,11 @@ class IntentWidget(QFrame):
 
         layout = QVBoxLayout(self)
 
-        # Title
         title = QLabel("INTENT")
         title.setFont(QFont("Arial", 14, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # Intent display
         self.intent_label = QLabel("--")
         self.intent_label.setFont(QFont("Arial", 32, QFont.Bold))
         self.intent_label.setAlignment(Qt.AlignCenter)
@@ -257,7 +237,6 @@ class IntentWidget(QFrame):
         self.intent_label.setStyleSheet("color: white; background-color: #333;")
         layout.addWidget(self.intent_label)
 
-        # Intent description
         self.intent_desc = QLabel("No active intent")
         self.intent_desc.setAlignment(Qt.AlignCenter)
         self.intent_desc.setWordWrap(True)
@@ -277,7 +256,6 @@ class IntentWidget(QFrame):
         )
         self.intent_desc.setText(f"Confidence: {intent.confidence:.2f}")
 
-
 class ControlPanel(QFrame):
     """Control panel for settings."""
 
@@ -288,12 +266,10 @@ class ControlPanel(QFrame):
 
         layout = QVBoxLayout(self)
 
-        # Title
         title = QLabel("CONTROLS")
         title.setFont(QFont("Arial", 12, QFont.Bold))
         layout.addWidget(title)
 
-        # Camera selection
         camera_layout = QHBoxLayout()
         camera_layout.addWidget(QLabel("Camera:"))
         self.camera_combo = QComboBox()
@@ -302,28 +278,23 @@ class ControlPanel(QFrame):
         camera_layout.addWidget(self.camera_combo)
         layout.addLayout(camera_layout)
 
-        # Model loading
         self.load_btn = QPushButton("Load Model")
         self.load_btn.clicked.connect(on_model_load)
         layout.addWidget(self.load_btn)
 
-        # Reset button
         self.reset_btn = QPushButton("Reset Intent History")
         self.reset_btn.clicked.connect(on_reset)
         layout.addWidget(self.reset_btn)
 
-        # Show landmarks checkbox
         self.show_landmarks = QCheckBox("Show Landmarks")
         self.show_landmarks.setChecked(True)
         layout.addWidget(self.show_landmarks)
 
-        # Show expression checkbox
         self.show_expression = QCheckBox("Show Expression")
         self.show_expression.setChecked(True)
         layout.addWidget(self.show_expression)
 
         layout.addStretch()
-
 
 class StatusBar(QStatusBar):
     """Status bar at the bottom."""
@@ -341,7 +312,6 @@ class StatusBar(QStatusBar):
     def update_status(self, status: str):
         self.status_label.setText(status)
 
-
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -350,12 +320,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ORFormer-Lite: Facial Expression Recognition")
         self.setMinimumSize(1200, 700)
 
-        # Central widget
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QHBoxLayout(central)
 
-        # Left panel (video)
         video_layout = QVBoxLayout()
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
@@ -364,10 +332,8 @@ class MainWindow(QMainWindow):
         video_layout.addWidget(self.video_label)
         main_layout.addLayout(video_layout, 3)
 
-        # Right panel (controls + info)
         right_layout = QVBoxLayout()
 
-        # Control panel
         self.control_panel = ControlPanel(
             on_camera_change=self._on_camera_change,
             on_model_load=self._on_model_load,
@@ -375,21 +341,17 @@ class MainWindow(QMainWindow):
         )
         right_layout.addWidget(self.control_panel)
 
-        # Expression widget
         self.expression_widget = ExpressionWidget()
         right_layout.addWidget(self.expression_widget)
 
-        # Intent widget
         self.intent_widget = IntentWidget()
         right_layout.addWidget(self.intent_widget)
 
         main_layout.addLayout(right_layout, 1)
 
-        # Status bar
         self.status_bar = StatusBar()
         self.setStatusBar(self.status_bar)
 
-        # Video thread
         self.video_thread = VideoThread(camera_id=0)
         self.video_thread.frame_ready.connect(self._on_frame)
         self.video_thread.error.connect(self._on_error)
@@ -397,19 +359,16 @@ class MainWindow(QMainWindow):
 
     def _on_frame(self, frame: np.ndarray, result: dict):
         """Handle new frame from video thread."""
-        # Draw landmarks if enabled
         if self.control_panel.show_landmarks.isChecked():
             display = result['annotated_frame']
         else:
             display = frame.copy()
 
-        # Convert to QImage
         h, w, ch = display.shape
         bytes_per_line = ch * w
         rgb_image = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
         qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
 
-        # Scale to fit
         pixmap = QPixmap.fromImage(qt_image)
         scaled = pixmap.scaled(
             self.video_label.size(),
@@ -418,12 +377,10 @@ class MainWindow(QMainWindow):
         )
         self.video_label.setPixmap(scaled)
 
-        # Update widgets
         if self.control_panel.show_expression.isChecked():
             self.expression_widget.update(result['expression'], result['occlusion'])
         self.intent_widget.update(result['intent'])
 
-        # Update status
         self.status_bar.update_fps(result['fps'])
 
     def _on_camera_change(self, camera_id: str):
@@ -457,11 +414,9 @@ class MainWindow(QMainWindow):
         self.video_thread.stop()
         event.accept()
 
-
 def main():
     app = QApplication(sys.argv)
 
-    # Set dark theme
     app.setStyleSheet("""
         QMainWindow {
             background-color: #2b2b2b;
@@ -509,7 +464,6 @@ def main():
     window.show()
 
     sys.exit(app.exec_())
-
 
 if __name__ == "__main__":
     main()

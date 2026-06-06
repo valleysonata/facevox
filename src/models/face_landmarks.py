@@ -7,7 +7,6 @@ from enum import Enum
 import os
 import urllib.request
 
-
 @dataclass
 class FaceLandmarks:
     landmarks: np.ndarray  # (478, 3) with x, y, z in pixel coordinates
@@ -15,7 +14,6 @@ class FaceLandmarks:
     confidence: float
     timestamp: float
     occlusion_mask: Optional[np.ndarray] = None  # (478,) boolean
-
 
 class MediaPipeFaceLandmarker:
     """MediaPipe-based facial landmark detection (478 landmarks)."""
@@ -205,7 +203,6 @@ class MediaPipeFaceLandmarker:
     def close(self):
         self.face_landmarker.close()
 
-
 class FaceLandmarkPipeline:
     """High-level pipeline for face landmark detection and feature extraction."""
 
@@ -237,7 +234,6 @@ class FaceLandmarkPipeline:
 
     def close(self):
         self.detector.close()
-
 
 def create_pipeline(**kwargs) -> FaceLandmarkPipeline:
     """Factory function to create a face landmark pipeline."""

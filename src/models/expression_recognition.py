@@ -8,7 +8,6 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
-
 class ExpressionLabel(Enum):
     NEUTRAL = "neutral"
     HAPPY = "happy"
@@ -28,14 +27,12 @@ class ExpressionLabel(Enum):
     HUNGRY = "hungry"
     TIRED = "tired"
 
-
 @dataclass
 class ExpressionResult:
     label: ExpressionLabel
     confidence: float
     probabilities: Dict[ExpressionLabel, float]
     features: Dict[str, float]
-
 
 class FeatureExtractor:
     """Extract and normalize features from facial landmarks."""
@@ -60,8 +57,6 @@ class FeatureExtractor:
         
     def extract(self, landmarks) -> np.ndarray:
         """Extract raw features from landmarks."""
-        # This is called from MediaPipeFaceLandmarker.extract_features
-        # We just need to convert the dict to array in consistent order
         return np.array([landmarks.get(name, 0.0) for name in self.FEATURE_NAMES])
     
     def fit(self, feature_list: List[np.ndarray]):
@@ -97,7 +92,6 @@ class FeatureExtractor:
         
         return np.concatenate([curr, velocity, acceleration])
 
-
 class ExpressionClassifier:
     """Facial expression classifier with temporal smoothing."""
     
@@ -112,7 +106,6 @@ class ExpressionClassifier:
         self.confidence_threshold = confidence_threshold
         self.prediction_history = deque(maxlen=temporal_window)
         
-        # Initialize classifier
         if model_type == "rf":
             self.clf = Pipeline([
                 ('scaler', StandardScaler()),
@@ -145,7 +138,6 @@ class ExpressionClassifier:
         
     def train(self, X: np.ndarray, y: np.ndarray):
         """Train the classifier."""
-        # Use base features directly (temporal features are added at inference time)
         self.clf.fit(X, y)
         self.classes_ = self.clf.classes_
         self.is_trained = True
@@ -213,7 +205,6 @@ class ExpressionClassifier:
         pitch = features.get('pitch', 0)
         yaw = features.get('yaw', 0)
 
-        # Score each expression
         scores = {label: 0.0 for label in ExpressionLabel}
 
         # SURPRISED: eyes wide open + mouth open + eyebrows raised
@@ -226,9 +217,9 @@ class ExpressionClassifier:
         if mouth_width > 50 and mouth_open > 2:
             smile_score = min(1.0, (mouth_width - 45) / 30)
             scores[ExpressionLabel.HAPPY] += smile_score * 0.7
-            if ear_avg < 0.27:  # slight squint from smiling
+            if ear_avg < 0.27:
                 scores[ExpressionLabel.HAPPY] += 0.15
-            if mouth_width > 55:  # wide smile beats surprised
+            if mouth_width > 55:
                 scores[ExpressionLabel.SURPRISED] *= 0.3
 
         # SAD: mouth narrow/corners down, brows low
@@ -260,25 +251,20 @@ class ExpressionClassifier:
         if mouth_open > 3 and mouth_open < 10 and brow_avg < 0.3 and brow_avg > -0.5:
             scores[ExpressionLabel.DISGUSTED] += 0.5
 
-        # NEUTRAL: nothing special happening
         if all(v < 0.3 for v in scores.values()):
             scores[ExpressionLabel.NEUTRAL] = 0.5
 
-        # Add base scores based on simple thresholds
         if mouth_open < 5:
             scores[ExpressionLabel.NEUTRAL] += 0.3
         if -0.5 < brow_avg < 1.0:
             scores[ExpressionLabel.NEUTRAL] += 0.2
 
-        # Normalize probabilities
         total = sum(scores.values()) + 1e-6
         prob_dict = {k: v / total for k, v in scores.items()}
 
-        # Get top prediction
         top_label = max(prob_dict, key=prob_dict.get)
         top_conf = prob_dict[top_label]
 
-        # Temporal smoothing
         self.prediction_history.append((top_label, top_conf))
 
         if len(self.prediction_history) >= 3:
@@ -313,7 +299,6 @@ class ExpressionClassifier:
         self.classes_ = data['classes_']
         self.is_trained = data['is_trained']
 
-
 class AssistiveExpressionMapper:
     """Map expressions to assistive communication intents."""
     
@@ -346,7 +331,6 @@ class AssistiveExpressionMapper:
         """Map expression to communication intent."""
         label = result.label
         
-        # Check for composite patterns - lowered thresholds for natural expressions
         features = result.features
         brow_up = features.get('left_brow_height', 0) > 0.5 or features.get('right_brow_height', 0) > 0.5
         mouth_open = features.get('mouth_open', 0) > 8.0
@@ -358,7 +342,6 @@ class AssistiveExpressionMapper:
         nod = pitch < -2.0
         shake = abs(features.get('yaw', 0)) > 5.0
         
-        # Check composite patterns - also use expression label as strong signal
         if label == ExpressionLabel.HAPPY:
             intent = ExpressionLabel.YES
         elif label == ExpressionLabel.SAD:
@@ -380,11 +363,9 @@ class AssistiveExpressionMapper:
         else:
             intent = ExpressionLabel.NEUTRAL
         
-        # Temporal smoothing for intents
         self.intent_history.append(intent)
         
         if len(self.intent_history) >= 3:
-            # Majority vote
             from collections import Counter
             counts = Counter(self.intent_history)
             intent = counts.most_common(1)[0][0]
@@ -396,11 +377,9 @@ class AssistiveExpressionMapper:
             features=features,
         )
 
-
 def create_classifier(model_type: str = "rf", **kwargs) -> ExpressionClassifier:
     """Factory function to create expression classifier."""
     return ExpressionClassifier(model_type=model_type, **kwargs)
-
 
 def create_mapper() -> AssistiveExpressionMapper:
     """Factory function to create intent mapper."""
