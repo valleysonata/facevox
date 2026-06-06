@@ -8,11 +8,8 @@ venv/
 dist/
 build/
 .checkpoints/
-data/dataset.json
-data/real_dataset.json
-checkpoints/expression_model.joblib
-checkpoints/face_landmarker.task
-checkpoints/metrics.json
+data/
+checkpoints/
 logs/
 *.log
 .DS_Store
