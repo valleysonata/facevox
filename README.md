@@ -1,4 +1,4 @@
-<img width="666" height="375" alt="F__3_-removebg-preview (1)" src="https://github.com/user-attachments/assets/d1332735-23da-4bc6-ade4-27060fa3704f" />
+<img width="1920" height="1080" alt="F (3)" src="https://github.com/user-attachments/assets/3f1e9c28-906d-469e-9f01-7a40ebf277c2" />
 
 
 
