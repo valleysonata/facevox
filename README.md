@@ -1,4 +1,4 @@
-<img width="666" height="375" alt="F-removebg-preview" src="https://github.com/user-attachments/assets/e90e3801-7750-4b3d-8e50-0f05410c102d" />
+<img width="1920" height="1080" alt="F (1)" src="https://github.com/user-attachments/assets/3d8d2170-bfbc-46ba-bd3e-9a7addf993eb" />
 
 
 # FaceVox (Work In Progress)
