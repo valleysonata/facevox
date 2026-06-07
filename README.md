@@ -1,4 +1,5 @@
-<img width="1920" height="1080" alt="F (1)" src="https://github.com/user-attachments/assets/3d8d2170-bfbc-46ba-bd3e-9a7addf993eb" />
+<img width="1365" height="768" alt="Gemini_Generated_Image_tcx4o0tcx4o0tcx4" src="https://github.com/user-attachments/assets/196cf222-c3bf-4edd-a779-dcd465bafd93" />
+
 
 
 # FaceVox (Work In Progress)
