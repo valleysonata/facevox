@@ -95,7 +95,6 @@ curl -X POST http://localhost:8000/predict -F "image=@photo.jpg"
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Ideas for contributions:**
-- Demo GIF / video recording
 - New expression classes (e.g., pain, fatigue, thirst)
 - Model improvements (knowledge distillation, quantization for mobile)
 - Mobile deployment (TFLite, CoreML)
