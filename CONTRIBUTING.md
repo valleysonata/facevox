@@ -59,7 +59,6 @@ Open an issue first to discuss before implementing. Good first issues are tagged
 4. Submit a PR with a clear description
 
 ### Priority Areas
-- **Demo GIF** — record a short clip showing the demo working live
 - **New expression classes** — pain, fatigue, thirst, comfort signals
 - **Mobile deployment** — TFLite or CoreML export
 - **Model compression** — quantization for edge devices
@@ -67,7 +66,6 @@ Open an issue first to discuss before implementing. Good first issues are tagged
 - **Tests** — unit tests for models, training pipeline, and API
 
 ## Code Style
-- No AI-generated comments (keep it human-readable)
 - Follow existing patterns in the codebase
 - Keep functions focused and short
 
