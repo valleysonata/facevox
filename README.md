@@ -1,4 +1,5 @@
-[F.pdf](https://github.com/user-attachments/files/28680690/F.pdf)
+<img width="418" height="127" alt="Capture" src="https://github.com/user-attachments/assets/960e4172-44d8-4323-87a5-3ab5b741515e" />
+
 
 # FaceVox (Work In Progress)
 
