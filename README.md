@@ -1,4 +1,4 @@
-<img width="418" height="127" alt="Capture" src="https://github.com/user-attachments/assets/960e4172-44d8-4323-87a5-3ab5b741515e" />
+<img width="1920" height="1080" alt="F" src="https://github.com/user-attachments/assets/525de0a7-3a6a-4cb9-bc13-2e83d0141ef8" />
 
 
 # FaceVox (Work In Progress)
