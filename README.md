@@ -37,7 +37,6 @@ py main.py train --mode train --model-type occlusion_aware  # Occlusion-aware at
 
 # Run demos
 py main.py demo     # Webcam demo
-py main.py gui      # PyQt5 GUI
 py main.py server   # REST API
 ```
 
