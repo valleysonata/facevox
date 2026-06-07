@@ -1,7 +1,7 @@
 
 # FaceVox (Work In Progress)
 
-Real-time facial expression recognition for assistive communication. Detects expressions via 478-point face landmarks (MediaPipe) and maps them to communication intents (YES/NO/HELP/PAIN) for users with motor disabilities.
+Facial expression recognition for assistive communication. Detects expressions via 478-point face landmarks (MediaPipe) and maps them to communication intents (YES/NO/HELP/PAIN) for users with motor disabilities.
 
 ## Setup
 
@@ -94,10 +94,3 @@ curl -X POST http://localhost:8000/predict -F "image=@photo.jpg"
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-**Ideas for contributions:**
-- New expression classes (e.g., pain, fatigue, thirst)
-- Model improvements (knowledge distillation, quantization for mobile)
-- Mobile deployment (TFLite, CoreML)
-- Multi-language support for the assistive interface
-- Unit tests and CI/CD
-- Benchmarking against public FER datasets (AffectNet, FER2013)
