@@ -6,7 +6,7 @@
 
 Facial expression recognition for assistive communication. Detects expressions via 478-point face landmarks (MediaPipe) and maps them to communication intents (YES/NO/HELP/PAIN) for users with motor disabilities.
 
-## BIG Disclaimer
+## BIG Disclaimer 
 
 I did the repository for fun because I just graduated high school and had too much spare time; it is meant to serve as a pre-university sandbox to explore system design. While the core concept and pipeline layout are mine, the heavy deep learning math was **vibecoded** using an LLM. My goal wasn't to write neural networks from scratch, but to experiment with orchestrating a full ML development cycle :)
 
