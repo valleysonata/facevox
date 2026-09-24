@@ -2,7 +2,7 @@
 
 Real-time facial expression recognition for assistive communication. Detects expressions via 478-point face landmarks (MediaPipe) and maps them to communication intents (YES/NO/HELP/PAIN) for users with motor disabilities.
 
-> **Status:** research prototype. The classical ML path (`rf`/`gb`) trains and runs end-to-end. The deep-learning paths (`transformer`/`temporal`/`occlusion_aware`) train end-to-end but need real captured landmark data to perform well — accuracy figures below are rough results on synthetic data, not benchmarks on real faces.
+**Status:** research prototype. The classical ML path (`rf`/`gb`) trains and runs end-to-end. The deep-learning paths (`transformer`/`temporal`/`occlusion_aware`) train end-to-end but need real captured landmark data to perform well — accuracy figures below are rough results on synthetic data, not benchmarks on real faces.
 
 ## Quick Start
 
