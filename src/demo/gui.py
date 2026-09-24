@@ -56,16 +56,17 @@ class VideoThread(QThread):
     frame_ready = pyqtSignal(np.ndarray, dict)
     error = pyqtSignal(str)
 
-    def __init__(self, camera_id: int = 0):
+    def __init__(self, camera_id: int = 0, model_type: str = "rf"):
         super().__init__()
         self.camera_id = camera_id
+        self.model_type = model_type
         self.running = False
         self.face_pipeline = FaceLandmarkPipeline(
             static_image_mode=False,
             max_num_faces=1,
             refine_landmarks=True,
         )
-        self.classifier = create_classifier(model_type="rf")
+        self.classifier = create_classifier(model_type=model_type)
         self.intent_mapper = create_mapper()
         self.occlusion_handler = RobustOcclusionHandler()
 
@@ -81,7 +82,7 @@ class VideoThread(QThread):
                     if candidate_path.endswith(".pt"):
                         self.classifier = create_classifier(model_type=mtype, model_path=candidate_path)
                     else:
-                        self.classifier = create_classifier(model_type="rf")
+                        self.classifier = create_classifier(model_type=self.model_type)
                         self.classifier.load(candidate_path)
                     print(f"Loaded trained model from {candidate_path}")
                     model_loaded = True
@@ -331,8 +332,9 @@ class StatusBar(QStatusBar):
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self):
+    def __init__(self, model_type: str = "rf"):
         super().__init__()
+        self.model_type = model_type
         self.setWindowTitle("FaceVox: Facial Expression Recognition")
         self.setMinimumSize(1200, 700)
 
@@ -368,7 +370,7 @@ class MainWindow(QMainWindow):
         self.status_bar = StatusBar()
         self.setStatusBar(self.status_bar)
 
-        self.video_thread = VideoThread(camera_id=0)
+        self.video_thread = VideoThread(camera_id=0, model_type=self.model_type)
         self.video_thread.frame_ready.connect(self._on_frame)
         self.video_thread.error.connect(self._on_error)
         self.video_thread.start()
@@ -402,7 +404,7 @@ class MainWindow(QMainWindow):
     def _on_camera_change(self, camera_id: str):
         """Handle camera change."""
         self.video_thread.stop()
-        self.video_thread = VideoThread(camera_id=int(camera_id))
+        self.video_thread = VideoThread(camera_id=int(camera_id), model_type=self.model_type)
         self.video_thread.frame_ready.connect(self._on_frame)
         self.video_thread.error.connect(self._on_error)
         self.video_thread.start()
@@ -446,7 +448,15 @@ class MainWindow(QMainWindow):
         self.video_thread.stop()
         event.accept()
 
-def main():
+def main(model_type: str = None):
+    if model_type is None:
+        import argparse
+        parser = argparse.ArgumentParser(description="FaceVox GUI")
+        parser.add_argument("--model-type", type=str, default="rf",
+                            help="Model type (rf, transformer, temporal, occlusion_aware)")
+        args = parser.parse_args()
+        model_type = args.model_type
+
     app = QApplication(sys.argv)
 
     app.setStyleSheet("""
@@ -492,7 +502,7 @@ def main():
         }
     """)
 
-    window = MainWindow()
+    window = MainWindow(model_type=model_type)
     window.show()
 
     sys.exit(app.exec_())

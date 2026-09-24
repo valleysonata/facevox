@@ -7,6 +7,7 @@ Main entry point for the application.
 import argparse
 import sys
 import os
+import json
 
 def main():
     parser = argparse.ArgumentParser(
@@ -15,22 +16,22 @@ def main():
         epilog="""
 Examples:
   # Run webcam demo
-  py main.py demo
+  python main.py demo
 
   # Run with GUI
-  py main.py gui
+  python main.py gui
 
   # Start API server
-  py main.py server
+  python main.py server
 
   # Train model with synthetic data
-  py main.py train --synthetic --samples 200
+  python main.py train --synthetic --samples 200
 
   # Train model with webcam capture
-  py main.py train --mode capture --samples 50
+  python main.py train --mode capture --samples 50
 
   # Evaluate trained model
-  py main.py train --mode evaluate
+  python main.py train --mode evaluate
         """,
     )
 
@@ -43,9 +44,11 @@ Examples:
     demo_parser.add_argument("--no-landmarks", action="store_true", help="Hide landmarks")
     demo_parser.add_argument("--no-expression", action="store_true", help="Hide expression")
     demo_parser.add_argument("--no-intent", action="store_true", help="Hide intent")
+    demo_parser.add_argument("--model-type", type=str, default="rf", help="Model type (rf, transformer, temporal, occlusion_aware)")
 
     # GUI command
     gui_parser = subparsers.add_parser("gui", help="Run with GUI")
+    gui_parser.add_argument("--model-type", type=str, default="rf", help="Model type")
 
     # Server command
     server_parser = subparsers.add_parser("server", help="Start API server")
@@ -54,27 +57,12 @@ Examples:
 
     # Train command
     train_parser = subparsers.add_parser("train", help="Train model")
-    train_parser.add_argument(
-        "--mode",
-        choices=["capture", "train", "evaluate"],
-        default="train",
-        help="Training mode",
-    )
+    train_parser.add_argument("--mode", choices=["capture", "train", "evaluate"], default="train", help="Training mode")
     train_parser.add_argument("--synthetic", action="store_true", help="Use synthetic data")
     train_parser.add_argument("--samples", type=int, default=200, help="Samples per class")
-    train_parser.add_argument("--subject", type=str, default=None, help="Subject name for capture (e.g. 'me', 'brother')")
-    train_parser.add_argument(
-        "--model-type",
-        choices=["rf", "gb", "transformer", "temporal", "occlusion_aware"],
-        default="rf",
-        help="Model type (rf=RandomForest, gb=GradientBoosting, transformer=spatial, temporal=sequence, occlusion_aware=attention)",
-    )
-    train_parser.add_argument(
-        "--model-path",
-        type=str,
-        default=None,
-        help="Model save path (auto-selected based on model type)",
-    )
+    train_parser.add_argument("--subject", type=str, default=None, help="Subject name for capture")
+    train_parser.add_argument("--model-type", choices=["rf", "gb", "transformer", "temporal", "occlusion_aware"], default="rf", help="Model type")
+    train_parser.add_argument("--model-path", type=str, default=None, help="Model save path")
 
     args = parser.parse_args()
 
@@ -89,19 +77,19 @@ Examples:
 
     if args.command == "demo":
         from src.demo.webcam_demo import WebcamDemo
-
         demo = WebcamDemo(
             model_path=args.model,
             camera_id=args.camera,
             show_landmarks=not args.no_landmarks,
             show_expression=not args.no_expression,
             show_intent=not args.no_intent,
+            model_type=args.model_type,
         )
         demo.start()
 
     elif args.command == "gui":
         from src.demo.gui import main as gui_main
-        gui_main()
+        gui_main(model_type=args.model_type)
 
     elif args.command == "server":
         from src.demo.server import run_server
@@ -112,7 +100,6 @@ Examples:
             ExpressionDatasetBuilder,
             ExpressionTrainer,
         )
-        import json
 
         dataset = ExpressionDatasetBuilder()
 
@@ -131,6 +118,11 @@ Examples:
             else:
                 dataset.merge_all()
 
+            if not dataset.data:
+                print("No training data found in data/.")
+                print("Use --synthetic to generate demo data, or --mode capture to record from a webcam.")
+                return
+
             trainer = ExpressionTrainer(model_type=args.model_type)
             X, y = trainer.prepare_data(dataset)
             print(f"\nTraining model ({args.model_type})...")
@@ -138,8 +130,8 @@ Examples:
 
             if args.model_path:
                 save_path = args.model_path
-            elif args.model_type == "transformer":
-                save_path = "checkpoints/expression_transformer.pt"
+            elif args.model_type in ("transformer", "temporal", "occlusion_aware"):
+                save_path = f"checkpoints/expression_{args.model_type}.pt"
             else:
                 save_path = "checkpoints/expression_model.joblib"
             trainer.save(save_path)
@@ -148,11 +140,25 @@ Examples:
                 json.dump(metrics, f, indent=2)
 
         elif args.mode == "evaluate":
-            dataset.load()
+            dataset.merge_all()
+            if not dataset.data:
+                print("No dataset files found in data/. Capture or generate data first.")
+                return
             trainer = ExpressionTrainer(model_type=args.model_type)
-            trainer.load(args.model_path)
+            if args.model_path:
+                trainer.load(args.model_path)
+            else:
+                save_path = f"checkpoints/expression_{args.model_type}.pt" if args.model_type in ("transformer", "temporal", "occlusion_aware") else "checkpoints/expression_model.joblib"
+                if os.path.exists(save_path):
+                    trainer.load(save_path)
+                else:
+                    print(f"No model found at {save_path}. Train a model first.")
+                    return
             X, y = trainer.prepare_data(dataset)
-            metrics = trainer.train(X, y)
+            metrics = trainer.evaluate(X, y)
+            with open("checkpoints/metrics.json", "w") as f:
+                json.dump(metrics, f, indent=2)
+
 
 if __name__ == "__main__":
     main()

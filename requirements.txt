@@ -10,4 +10,6 @@ tqdm>=4.65.0
 pyyaml>=6.0
 fastapi>=0.100.0
 uvicorn>=0.23.0
+httpx>=0.24.0
 requests>=2.31.0
+PyQt5>=5.15.0

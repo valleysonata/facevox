@@ -3,9 +3,9 @@ import mediapipe as mp
 import numpy as np
 from typing import Optional, List, Tuple, Dict
 from dataclasses import dataclass
-from enum import Enum
 import os
 import urllib.request
+
 
 @dataclass
 class FaceLandmarks:
@@ -14,6 +14,7 @@ class FaceLandmarks:
     confidence: float
     timestamp: float
     occlusion_mask: Optional[np.ndarray] = None  # (478,) boolean
+
 
 class MediaPipeFaceLandmarker:
     """MediaPipe-based facial landmark detection (478 landmarks)."""
@@ -33,32 +34,46 @@ class MediaPipeFaceLandmarker:
         FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
         RunningMode = mp.tasks.vision.RunningMode
 
-        # Download model if not present
         model_path = os.path.join("checkpoints", "face_landmarker.task")
         os.makedirs("checkpoints", exist_ok=True)
         if not os.path.exists(model_path):
-            print("Downloading face_landmarker model...")
-            urllib.request.urlretrieve(self.MODEL_URL, model_path)
-            print("Model downloaded.")
+            print("Downloading face_landmarker model... (this may take a moment)")
+            try:
+                urllib.request.urlretrieve(self.MODEL_URL, model_path)
+                print("Model downloaded.")
+            except Exception as e:
+                print(f"Warning: Could not download model: {e}")
+                print("Trying to use MediaPipe face detection as fallback...")
+                self._use_fallback = True
+            else:
+                self._use_fallback = False
+        else:
+            self._use_fallback = False
 
-        options = FaceLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=model_path),
-            running_mode=RunningMode.VIDEO if not static_image_mode else RunningMode.IMAGE,
-            num_faces=max_num_faces,
-            min_face_detection_confidence=min_detection_confidence,
-            min_face_presence_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence,
-            output_face_blendshapes=False,
-        )
+        if not self._use_fallback:
+            try:
+                options = FaceLandmarkerOptions(
+                    base_options=BaseOptions(model_asset_path=model_path),
+                    running_mode=RunningMode.VIDEO if not static_image_mode else RunningMode.IMAGE,
+                    num_faces=max_num_faces,
+                    min_face_detection_confidence=min_detection_confidence,
+                    min_face_presence_confidence=min_detection_confidence,
+                    min_tracking_confidence=min_tracking_confidence,
+                    output_face_blendshapes=False,
+                )
+                self.face_landmarker = FaceLandmarker.create_from_options(options)
+                self._use_landmarker = True
+            except Exception as e:
+                print(f"Warning: FaceLandmarker creation failed: {e}")
+                self._use_fallback = True
+                self._use_landmarker = False
+        else:
+            self._use_landmarker = False
 
-        self.face_landmarker = FaceLandmarker.create_from_options(options)
         self.static_image_mode = static_image_mode
         self.timestamp_counter = 0
 
-        # Drawing connections (manual - mediapipe new API doesn't have drawing utils)
-        self.mp_face_mesh_connections = mp.tasks.vision.FaceLandmarksConnections
-
-        # Key landmark indices for expressions
+        # Key landmark indices for expressions (MediaPipe Face Mesh)
         self.LIPS_INNER = [13, 14, 15, 16, 17, 78, 80, 81, 82, 87, 88, 91, 95]
         self.LIPS_OUTER = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146]
         self.LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 246, 161, 160, 159, 158, 157, 173]
@@ -66,38 +81,79 @@ class MediaPipeFaceLandmarker:
         self.LEFT_EYEBROW = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46]
         self.RIGHT_EYEBROW = [336, 296, 334, 293, 300, 276, 283, 282, 295, 285]
 
+        # Fallback: use classic MediaPipe solutions if available.
+        if self._use_fallback:
+            try:
+                solutions = mp.solutions
+                self.face_mesh = solutions.face_mesh.FaceMesh(
+                    static_image_mode=static_image_mode,
+                    max_num_faces=max_num_faces,
+                    refine_landmarks=refine_landmarks,
+                    min_detection_confidence=min_detection_confidence,
+                    min_tracking_confidence=min_tracking_confidence,
+                )
+                self._mesh_available = True
+            except Exception as e:
+                print(f"Warning: MediaPipe fallback unavailable: {e}")
+                self.face_mesh = None
+                self._mesh_available = False
+
     def process(self, image: np.ndarray) -> Optional[FaceLandmarks]:
         """Process image and return face landmarks."""
         if image is None:
             return None
 
+        h, w = image.shape[:2]
+
+        if self._use_landmarker:
+            return self._process_with_landmarker(image, h, w)
+        else:
+            return self._process_with_mesh(image, h, w)
+
+    def _process_with_landmarker(self, image: np.ndarray, h: int, w: int) -> Optional[FaceLandmarks]:
+        """Process using MediaPipe FaceLandmarker (new API)."""
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
 
-        h, w = image.shape[:2]
-
-        if self.static_image_mode:
-            result = self.face_landmarker.detect(mp_image)
-        else:
-            self.timestamp_counter += 1
-            result = self.face_landmarker.detect_for_video(mp_image, self.timestamp_counter)
+        self.timestamp_counter += 1
+        result = self.face_landmarker.detect_for_video(mp_image, self.timestamp_counter)
 
         if not result.face_landmarks:
             return None
 
-        # Take the first face
         face_lm = result.face_landmarks[0]
-
-        # Convert to numpy array (478, 3) in pixel coordinates
-        landmarks = np.array([
-            [lm.x * w, lm.y * h, lm.z * w] for lm in face_lm
-        ], dtype=np.float32)
+        landmarks = np.array(
+            [[lm.x * w, lm.y * h, lm.z * w] for lm in face_lm],
+            dtype=np.float32
+        )
 
         return FaceLandmarks(
-            landmarks=landmarks,
-            image_shape=(h, w),
-            confidence=1.0,
-            timestamp=self.timestamp_counter / 30.0,
+            landmarks=landmarks, image_shape=(h, w),
+            confidence=1.0, timestamp=self.timestamp_counter / 30.0,
+        )
+
+    def _process_with_mesh(self, image: np.ndarray, h: int, w: int) -> Optional[FaceLandmarks]:
+        """Process using MediaPipe FaceMesh (fallback)."""
+        if not getattr(self, "_mesh_available", False):
+            raise RuntimeError(
+                "Face landmark model is unavailable and the MediaPipe "
+                "fallback could not be initialised."
+            )
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = self.face_mesh.process(image_rgb)
+
+        if not results.multi_face_landmarks:
+            return None
+
+        face_landmarks = results.multi_face_landmarks[0]
+        landmarks = np.array(
+            [[lm.x * w, lm.y * h, lm.z * w] for lm in face_landmarks.landmark],
+            dtype=np.float32
+        )
+
+        return FaceLandmarks(
+            landmarks=landmarks, image_shape=(h, w),
+            confidence=1.0, timestamp=0.0,
         )
 
     def draw_landmarks(
@@ -112,30 +168,26 @@ class MediaPipeFaceLandmarker:
 
         # Draw individual landmarks as small circles
         for i, (x, y, z) in enumerate(landmarks.landmarks):
-            cv2.circle(annotated, (int(x), int(y)), 1, (0, 255, 0), -1)
+            if 0 <= int(x) < w and 0 <= int(y) < h:
+                cv2.circle(annotated, (int(x), int(y)), 1, (0, 255, 0), -1)
 
-        # Draw some key connections
         if draw_connections:
-            for conn in self.mp_face_mesh_connections.FACE_LANDMARKS_LEFT_EYE:
-                start, end = conn.start, conn.end
-                if start < len(landmarks.landmarks) and end < len(landmarks.landmarks):
-                    pt1 = (int(landmarks.landmarks[start][0]), int(landmarks.landmarks[start][1]))
-                    pt2 = (int(landmarks.landmarks[end][0]), int(landmarks.landmarks[end][1]))
-                    cv2.line(annotated, pt1, pt2, (0, 200, 255), 1)
+            # Draw eye connections
+            eye_color = (0, 200, 255)
+            for eye_pts in [self.LEFT_EYE, self.RIGHT_EYE]:
+                for i in range(len(eye_pts) - 1):
+                    p1 = (int(landmarks.landmarks[eye_pts[i]][0]), int(landmarks.landmarks[eye_pts[i]][1]))
+                    p2 = (int(landmarks.landmarks[eye_pts[i + 1]][0]), int(landmarks.landmarks[eye_pts[i + 1]][1]))
+                    if 0 <= p1[0] < w and 0 <= p1[1] < h and 0 <= p2[0] < w and 0 <= p2[1] < h:
+                        cv2.line(annotated, p1, p2, eye_color, 1)
 
-            for conn in self.mp_face_mesh_connections.FACE_LANDMARKS_RIGHT_EYE:
-                start, end = conn.start, conn.end
-                if start < len(landmarks.landmarks) and end < len(landmarks.landmarks):
-                    pt1 = (int(landmarks.landmarks[start][0]), int(landmarks.landmarks[start][1]))
-                    pt2 = (int(landmarks.landmarks[end][0]), int(landmarks.landmarks[end][1]))
-                    cv2.line(annotated, pt1, pt2, (0, 200, 255), 1)
-
-            for conn in self.mp_face_mesh_connections.FACE_LANDMARKS_LIPS:
-                start, end = conn.start, conn.end
-                if start < len(landmarks.landmarks) and end < len(landmarks.landmarks):
-                    pt1 = (int(landmarks.landmarks[start][0]), int(landmarks.landmarks[start][1]))
-                    pt2 = (int(landmarks.landmarks[end][0]), int(landmarks.landmarks[end][1]))
-                    cv2.line(annotated, pt1, pt2, (0, 0, 255), 1)
+            # Draw lip connections
+            lip_color = (0, 0, 255)
+            for i in range(len(self.LIPS_OUTER) - 1):
+                p1 = (int(landmarks.landmarks[self.LIPS_OUTER[i]][0]), int(landmarks.landmarks[self.LIPS_OUTER[i]][1]))
+                p2 = (int(landmarks.landmarks[self.LIPS_OUTER[i + 1]][0]), int(landmarks.landmarks[self.LIPS_OUTER[i + 1]][1]))
+                if 0 <= p1[0] < w and 0 <= p1[1] < h and 0 <= p2[0] < w and 0 <= p2[1] < h:
+                    cv2.line(annotated, p1, p2, lip_color, 1)
 
         return annotated
 
@@ -144,27 +196,25 @@ class MediaPipeFaceLandmarker:
         lm = landmarks.landmarks
         features = {}
 
-        # Mouth opening (vertical distance between upper/lower lip)
+        # Mouth opening (vertical distance between upper/lower lip landmarks)
         upper_lip = lm[13]
         lower_lip = lm[14]
-        mouth_open = float(np.linalg.norm(upper_lip[:2] - lower_lip[:2]))
-        features['mouth_open'] = mouth_open
+        features['mouth_open'] = float(np.linalg.norm(upper_lip[:2] - lower_lip[:2]))
 
-        # Mouth width
+        # Mouth width (distance between corners of mouth)
         left_corner = lm[61]
         right_corner = lm[291]
-        mouth_width = float(np.linalg.norm(left_corner[:2] - right_corner[:2]))
-        features['mouth_width'] = mouth_width
+        features['mouth_width'] = float(np.linalg.norm(left_corner[:2] - right_corner[:2]))
 
-        # Lip height (average)
+        # Lip height (average of inner lip distances)
         lip_heights = []
         for i in range(len(self.LIPS_INNER) // 2):
             upper = lm[self.LIPS_INNER[i]]
             lower = lm[self.LIPS_INNER[-(i + 1)]]
             lip_heights.append(float(np.linalg.norm(upper[:2] - lower[:2])))
-        features['lip_height_avg'] = float(np.mean(lip_heights))
+        features['lip_height_avg'] = float(np.mean(lip_heights)) if lip_heights else 0.0
 
-        # Eye features
+        # Eye features (Eye Aspect Ratio)
         left_eye = lm[self.LEFT_EYE]
         right_eye = lm[self.RIGHT_EYE]
 
@@ -186,10 +236,10 @@ class MediaPipeFaceLandmarker:
         left_brow_top = float(np.mean(left_brow[:, 1]))
         right_brow_top = float(np.mean(right_brow[:, 1]))
 
-        features['left_brow_height'] = left_eye_top - left_brow_top
-        features['right_brow_height'] = right_eye_top - right_brow_top
+        features['left_brow_height'] = float(left_eye_top - left_brow_top)
+        features['right_brow_height'] = float(right_eye_top - right_brow_top)
 
-        # Head pose (approximate)
+        # Head pose approximation
         nose_tip = lm[1]
         chin = lm[152]
         left_cheek = lm[234]
@@ -201,7 +251,14 @@ class MediaPipeFaceLandmarker:
         return features
 
     def close(self):
-        self.face_landmarker.close()
+        """Cleanup resources."""
+        if hasattr(self, 'face_landmarker'):
+            self.face_landmarker.close()
+        if hasattr(self, 'face_mesh'):
+            self.face_mesh.close()
+        if hasattr(self, 'face_detector'):
+            self.face_detector.close()
+
 
 class FaceLandmarkPipeline:
     """High-level pipeline for face landmark detection and feature extraction."""
@@ -222,10 +279,8 @@ class FaceLandmarkPipeline:
         landmarks = self.process_frame(frame)
         if landmarks is None:
             return None
-
         features = self.detector.extract_features(landmarks)
         annotated = self.detector.draw_landmarks(frame, landmarks)
-
         return {
             'landmarks': landmarks,
             'features': features,
@@ -233,22 +288,25 @@ class FaceLandmarkPipeline:
         }
 
     def close(self):
+        """Cleanup resources."""
         self.detector.close()
+
 
 def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
     """Normalize 478x3 landmarks to be scale and position invariant.
-    
-    Centers on nose tip (landmark 1), scales by inter-eye distance (33 vs 263).
+
+    Centers on nose tip (landmark 1), scales by inter-eye distance (landmark 33 vs 263).
     """
     lm = landmarks.copy()
     nose = lm[1].copy()
     lm -= nose
-    left_eye = np.mean(lm[33:37], axis=0)
-    right_eye = np.mean(lm[263:267], axis=0)
-    eye_dist = np.linalg.norm(right_eye - left_eye)
+    left_eye_center = np.mean(lm[33:37], axis=0)
+    right_eye_center = np.mean(lm[263:267], axis=0)
+    eye_dist = np.linalg.norm(right_eye_center - left_eye_center)
     if eye_dist > 1e-6:
         lm /= eye_dist
     return lm
+
 
 def create_pipeline(**kwargs) -> FaceLandmarkPipeline:
     """Factory function to create a face landmark pipeline."""

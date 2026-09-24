@@ -7,12 +7,14 @@ venv/
 *.egg-info/
 dist/
 build/
-.checkpoints/
-data/
 checkpoints/
+data/
 logs/
 *.log
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+screenshot_*.png
+*.pt
+*.joblib
