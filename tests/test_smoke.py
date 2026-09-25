@@ -177,6 +177,19 @@ def test_torch_forward_shapes():
     ).shape == (2, 9)
 
 
+def test_demo_mirror_defaults_on():
+    import inspect
+    import cv2
+    from src.demo.webcam_demo import WebcamDemo
+
+    params = inspect.signature(WebcamDemo.__init__).parameters
+    assert params["mirror"].default is True
+    img = np.zeros((4, 6, 3), dtype=np.uint8)
+    img[:, :3] = 255
+    flipped = cv2.flip(img, 1)
+    assert flipped[:, -3:].sum() > flipped[:, :3].sum()
+
+
 def test_torch_dim_mismatch_is_clear():
     from src.models.expression_recognition import create_classifier
 

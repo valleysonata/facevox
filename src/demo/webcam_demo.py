@@ -56,12 +56,14 @@ class WebcamDemo:
         show_intent: bool = True,
         show_fps: bool = True,
         model_type: str = "rf",
+        mirror: bool = True,
     ):
         self.window_name = window_name
         self.show_landmarks = show_landmarks
         self.show_expression = show_expression
         self.show_intent = show_intent
         self.show_fps = show_fps
+        self.mirror = mirror
 
         self.face_pipeline = FaceLandmarkPipeline(
             static_image_mode=False,
@@ -88,12 +90,20 @@ class WebcamDemo:
         candidates = []
         if model_path:
             candidates.append((model_path, model_type))
-        candidates.extend([
+        auto = [
             ("checkpoints/expression_occlusion.pt", "occlusion_aware"),
             ("checkpoints/expression_temporal.pt", "temporal"),
             ("checkpoints/expression_transformer.pt", "transformer"),
             ("checkpoints/expression_model.joblib", "rf"),
-        ])
+        ]
+        # Prefer the most recently trained checkpoint: a fresh model trained
+        # on real data must win over older synthetic-data experiments.
+        auto = sorted(
+            [c for c in auto if os.path.exists(c[0])],
+            key=lambda c: os.path.getmtime(c[0]),
+            reverse=True,
+        )
+        candidates.extend(auto)
         for candidate_path, mtype in candidates:
             if os.path.exists(candidate_path):
                 try:
@@ -120,6 +130,8 @@ class WebcamDemo:
             if not ret:
                 print("Error: Could not read frame")
                 break
+            if self.mirror:
+                frame = cv2.flip(frame, 1)
 
             start_time = time.time()
             result = self._process_frame(frame)
@@ -247,6 +259,7 @@ def main():
     parser.add_argument("--no-expression", action="store_true")
     parser.add_argument("--no-intent", action="store_true")
     parser.add_argument("--model-type", type=str, default="rf")
+    parser.add_argument("--no-mirror", action="store_true", help="Disable selfie-view mirroring")
     args = parser.parse_args()
 
     demo = WebcamDemo(
@@ -256,6 +269,7 @@ def main():
         show_expression=not args.no_expression,
         show_intent=not args.no_intent,
         model_type=args.model_type,
+        mirror=not args.no_mirror,
     )
     demo.start()
 

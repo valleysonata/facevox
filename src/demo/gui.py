@@ -56,10 +56,11 @@ class VideoThread(QThread):
     frame_ready = pyqtSignal(np.ndarray, dict)
     error = pyqtSignal(str)
 
-    def __init__(self, camera_id: int = 0, model_type: str = "rf"):
+    def __init__(self, camera_id: int = 0, model_type: str = "rf", mirror: bool = True):
         super().__init__()
         self.camera_id = camera_id
         self.model_type = model_type
+        self.mirror = mirror
         self.running = False
         self.face_pipeline = FaceLandmarkPipeline(
             static_image_mode=False,
@@ -70,28 +71,8 @@ class VideoThread(QThread):
         self.intent_mapper = create_mapper()
         self.occlusion_handler = RobustOcclusionHandler()
 
-        model_loaded = False
-        for candidate_path, mtype in [
-            ("checkpoints/expression_occlusion.pt", "occlusion_aware"),
-            ("checkpoints/expression_temporal.pt", "temporal"),
-            ("checkpoints/expression_transformer.pt", "transformer"),
-            ("checkpoints/expression_model.joblib", "rf"),
-        ]:
-            if os.path.exists(candidate_path):
-                try:
-                    if candidate_path.endswith(".pt"):
-                        self.classifier = create_classifier(model_type=mtype, model_path=candidate_path)
-                    else:
-                        self.classifier = create_classifier(model_type=self.model_type)
-                        self.classifier.load(candidate_path)
-                    print(f"Loaded trained model from {candidate_path}")
-                    model_loaded = True
-                    break
-                except Exception as e:
-                    print(f"Could not load {candidate_path}: {e}")
-
-        if not model_loaded:
-            print("No trained model found. Using rule-based fallback.")
+        from src.demo.webcam_demo import WebcamDemo
+        self.classifier = WebcamDemo._load_classifier(None, model_type)
 
     def run(self):
         self.running = True
@@ -108,6 +89,8 @@ class VideoThread(QThread):
             ret, frame = cap.read()
             if not ret:
                 continue
+            if self.mirror:
+                frame = cv2.flip(frame, 1)
 
             start_time = time.time()
             result = self._process_frame(frame)
@@ -404,35 +387,21 @@ class MainWindow(QMainWindow):
     def _on_camera_change(self, camera_id: str):
         """Handle camera change."""
         self.video_thread.stop()
-        self.video_thread = VideoThread(camera_id=int(camera_id), model_type=self.model_type)
+        self.video_thread = VideoThread(camera_id=int(camera_id), model_type=self.model_type, mirror=self.video_thread.mirror)
         self.video_thread.frame_ready.connect(self._on_frame)
         self.video_thread.error.connect(self._on_error)
         self.video_thread.start()
         self.status_bar.update_status(f"Switched to camera {camera_id}")
 
     def _on_model_load(self):
-        model_loaded = False
-        for candidate_path, mtype in [
-            ("checkpoints/expression_occlusion.pt", "occlusion_aware"),
-            ("checkpoints/expression_temporal.pt", "temporal"),
-            ("checkpoints/expression_transformer.pt", "transformer"),
-            ("checkpoints/expression_model.joblib", "rf"),
-        ]:
-            if os.path.exists(candidate_path):
-                try:
-                    if candidate_path.endswith(".pt"):
-                        self.video_thread.classifier = create_classifier(
-                            model_type=mtype, model_path=candidate_path
-                        )
-                    else:
-                        self.video_thread.classifier.load(candidate_path)
-                    self.status_bar.update_status(f"Loaded model from {candidate_path}")
-                    model_loaded = True
-                    break
-                except Exception as e:
-                    self.status_bar.update_status(f"Error loading {candidate_path}: {e}")
-        if not model_loaded:
-            self.status_bar.update_status("No trained model found")
+        from src.demo.webcam_demo import WebcamDemo
+        try:
+            self.video_thread.classifier = WebcamDemo._load_classifier(
+                None, self.video_thread.model_type
+            )
+            self.status_bar.update_status("Loaded newest checkpoint (see console)")
+        except Exception as e:
+            self.status_bar.update_status(f"Error loading model: {e}")
 
     def _on_reset(self):
         """Handle reset button."""

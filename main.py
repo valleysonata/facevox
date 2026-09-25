@@ -45,6 +45,7 @@ Examples:
     demo_parser.add_argument("--no-expression", action="store_true", help="Hide expression")
     demo_parser.add_argument("--no-intent", action="store_true", help="Hide intent")
     demo_parser.add_argument("--model-type", type=str, default="rf", help="Model type (rf, transformer, temporal, occlusion_aware)")
+    demo_parser.add_argument("--no-mirror", action="store_true", help="Disable selfie-view mirroring")
 
     # GUI command
     gui_parser = subparsers.add_parser("gui", help="Run with GUI")
@@ -84,6 +85,7 @@ Examples:
             show_expression=not args.no_expression,
             show_intent=not args.no_intent,
             model_type=args.model_type,
+            mirror=not args.no_mirror,
         )
         demo.start()
 
