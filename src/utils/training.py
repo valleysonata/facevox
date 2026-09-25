@@ -151,36 +151,38 @@ class ExpressionDatasetBuilder:
         print(f"\nTotal dataset: {len(self.data)} samples")
 
     def generate_synthetic(self, samples_per_class=200):
-        """Generate synthetic training data."""
+        """Generate synthetic training data (scale-normalized feature units)."""
         np.random.seed(42)
+        # Means/stds are fractions of the inter-eye distance, matching the
+        # output of MediaPipeFaceLandmarker.extract_features.
         distributions = {
-            0: {'mouth_open': (3.0, 2.0), 'mouth_width': (50.0, 8.0), 'lip_height_avg': (2.0, 1.0),
+            0: {'mouth_open': (0.050, 0.033), 'mouth_width': (0.833, 0.133), 'lip_height_avg': (0.033, 0.017),
                 'left_ear': (0.25, 0.05), 'right_ear': (0.25, 0.05), 'ear_avg': (0.25, 0.05),
-                'left_brow_height': (1.0, 2.0), 'right_brow_height': (1.0, 2.0), 'pitch': (0.0, 5.0), 'yaw': (0.0, 3.0)},
-            1: {'mouth_open': (8.0, 4.0), 'mouth_width': (60.0, 10.0), 'lip_height_avg': (5.0, 2.0),
+                'left_brow_height': (0.017, 0.033), 'right_brow_height': (0.017, 0.033), 'pitch': (0.0, 0.083), 'yaw': (0.0, 0.05)},
+            1: {'mouth_open': (0.133, 0.067), 'mouth_width': (1.0, 0.167), 'lip_height_avg': (0.083, 0.033),
                 'left_ear': (0.22, 0.04), 'right_ear': (0.22, 0.04), 'ear_avg': (0.22, 0.04),
-                'left_brow_height': (2.0, 2.0), 'right_brow_height': (2.0, 2.0), 'pitch': (0.0, 5.0), 'yaw': (0.0, 3.0)},
-            2: {'mouth_open': (2.0, 1.5), 'mouth_width': (40.0, 8.0), 'lip_height_avg': (1.5, 0.8),
+                'left_brow_height': (0.033, 0.033), 'right_brow_height': (0.033, 0.033), 'pitch': (0.0, 0.083), 'yaw': (0.0, 0.05)},
+            2: {'mouth_open': (0.033, 0.025), 'mouth_width': (0.667, 0.133), 'lip_height_avg': (0.025, 0.013),
                 'left_ear': (0.20, 0.04), 'right_ear': (0.20, 0.04), 'ear_avg': (0.20, 0.04),
-                'left_brow_height': (0.5, 1.5), 'right_brow_height': (0.5, 1.5), 'pitch': (3.0, 5.0), 'yaw': (0.0, 3.0)},
-            3: {'mouth_open': (15.0, 5.0), 'mouth_width': (45.0, 8.0), 'lip_height_avg': (8.0, 3.0),
+                'left_brow_height': (0.008, 0.025), 'right_brow_height': (0.008, 0.025), 'pitch': (0.05, 0.083), 'yaw': (0.0, 0.05)},
+            3: {'mouth_open': (0.25, 0.083), 'mouth_width': (0.75, 0.133), 'lip_height_avg': (0.133, 0.05),
                 'left_ear': (0.35, 0.05), 'right_ear': (0.35, 0.05), 'ear_avg': (0.35, 0.05),
-                'left_brow_height': (4.0, 2.0), 'right_brow_height': (4.0, 2.0), 'pitch': (0.0, 5.0), 'yaw': (0.0, 3.0)},
-            4: {'mouth_open': (5.0, 3.0), 'mouth_width': (45.0, 10.0), 'lip_height_avg': (3.0, 1.5),
+                'left_brow_height': (0.067, 0.033), 'right_brow_height': (0.067, 0.033), 'pitch': (0.0, 0.083), 'yaw': (0.0, 0.05)},
+            4: {'mouth_open': (0.083, 0.05), 'mouth_width': (0.75, 0.167), 'lip_height_avg': (0.05, 0.025),
                 'left_ear': (0.23, 0.04), 'right_ear': (0.23, 0.04), 'ear_avg': (0.23, 0.04),
-                'left_brow_height': (-2.0, 1.5), 'right_brow_height': (-2.0, 1.5), 'pitch': (-2.0, 5.0), 'yaw': (0.0, 3.0)},
-            5: {'mouth_open': (3.0, 2.0), 'mouth_width': (42.0, 8.0), 'lip_height_avg': (2.0, 1.0),
+                'left_brow_height': (-0.033, 0.025), 'right_brow_height': (-0.033, 0.025), 'pitch': (-0.033, 0.083), 'yaw': (0.0, 0.05)},
+            5: {'mouth_open': (0.05, 0.033), 'mouth_width': (0.70, 0.133), 'lip_height_avg': (0.033, 0.017),
                 'left_ear': (0.24, 0.04), 'right_ear': (0.24, 0.04), 'ear_avg': (0.24, 0.04),
-                'left_brow_height': (0.5, 2.0), 'right_brow_height': (0.5, 2.0), 'pitch': (2.0, 5.0), 'yaw': (0.0, 3.0)},
-            6: {'mouth_open': (6.0, 3.0), 'mouth_width': (48.0, 8.0), 'lip_height_avg': (4.0, 2.0),
+                'left_brow_height': (0.008, 0.033), 'right_brow_height': (0.008, 0.033), 'pitch': (0.033, 0.083), 'yaw': (0.0, 0.05)},
+            6: {'mouth_open': (0.10, 0.05), 'mouth_width': (0.80, 0.133), 'lip_height_avg': (0.067, 0.033),
                 'left_ear': (0.30, 0.05), 'right_ear': (0.30, 0.05), 'ear_avg': (0.30, 0.05),
-                'left_brow_height': (3.0, 2.0), 'right_brow_height': (3.0, 2.0), 'pitch': (-1.0, 5.0), 'yaw': (0.0, 3.0)},
-            7: {'mouth_open': (2.0, 1.5), 'mouth_width': (45.0, 8.0), 'lip_height_avg': (1.5, 0.8),
+                'left_brow_height': (0.05, 0.033), 'right_brow_height': (0.05, 0.033), 'pitch': (-0.017, 0.083), 'yaw': (0.0, 0.05)},
+            7: {'mouth_open': (0.033, 0.025), 'mouth_width': (0.75, 0.133), 'lip_height_avg': (0.025, 0.013),
                 'left_ear': (0.25, 0.05), 'right_ear': (0.25, 0.05), 'ear_avg': (0.25, 0.05),
-                'left_brow_height': (3.0, 2.0), 'right_brow_height': (0.0, 2.0), 'pitch': (0.0, 5.0), 'yaw': (5.0, 5.0)},
-            8: {'mouth_open': (1.5, 1.0), 'mouth_width': (48.0, 8.0), 'lip_height_avg': (1.2, 0.6),
+                'left_brow_height': (0.05, 0.033), 'right_brow_height': (0.0, 0.033), 'pitch': (0.0, 0.083), 'yaw': (0.083, 0.083)},
+            8: {'mouth_open': (0.025, 0.017), 'mouth_width': (0.80, 0.133), 'lip_height_avg': (0.02, 0.01),
                 'left_ear': (0.24, 0.04), 'right_ear': (0.24, 0.04), 'ear_avg': (0.24, 0.04),
-                'left_brow_height': (2.5, 2.0), 'right_brow_height': (1.0, 2.0), 'pitch': (0.0, 5.0), 'yaw': (3.0, 5.0)},
+                'left_brow_height': (0.042, 0.033), 'right_brow_height': (0.017, 0.033), 'pitch': (0.0, 0.083), 'yaw': (0.05, 0.083)},
         }
         feature_names = FeatureExtractor.FEATURE_NAMES
         rng = np.random.default_rng(42)

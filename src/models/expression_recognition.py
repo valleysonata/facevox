@@ -45,6 +45,7 @@ class ExpressionResult:
     confidence: float
     probabilities: Dict[ExpressionLabel, float]
     features: Dict[str, float]
+    confirmed: bool = False
 
 
 class FeatureExtractor:
@@ -185,7 +186,12 @@ class ExpressionClassifier:
         )
 
     def _predict_rules(self, features: Dict[str, float]) -> ExpressionResult:
-        """Rule-based fallback when no trained model is available."""
+        """Rule-based fallback when no trained model is available.
+
+        Thresholds are in scale-normalized units (see
+        MediaPipeFaceLandmarker.extract_features): distances are fractions
+        of the inter-eye distance, so they hold at any camera distance.
+        """
         mouth_open = features.get('mouth_open', 0)
         mouth_width = features.get('mouth_width', 0)
         ear_avg = features.get('ear_avg', 0)
@@ -197,28 +203,28 @@ class ExpressionClassifier:
         yaw = features.get('yaw', 0)
 
         scores = {label: 0.0 for label in ExpressionLabel}
-        if ear_avg > 0.30 and mouth_open > 15 and brow_avg > 2.5:
+        if ear_avg > 0.30 and mouth_open > 0.25 and brow_avg > 0.042:
             scores[ExpressionLabel.SURPRISED] += 0.8
             if ear_avg > 0.34: scores[ExpressionLabel.SURPRISED] += 0.2
-        if mouth_width > 50 and mouth_open > 2:
-            smile_score = min(1.0, (mouth_width - 45) / 30)
+        if mouth_width > 0.83 and mouth_open > 0.033:
+            smile_score = min(1.0, (mouth_width - 0.75) / 0.5)
             scores[ExpressionLabel.HAPPY] += smile_score * 0.7
             if ear_avg < 0.27: scores[ExpressionLabel.HAPPY] += 0.15
-            if mouth_width > 55: scores[ExpressionLabel.SURPRISED] *= 0.3
-        if mouth_width < 48 and brow_avg < 0.5:
+            if mouth_width > 0.92: scores[ExpressionLabel.SURPRISED] *= 0.3
+        if mouth_width < 0.80 and brow_avg < 0.0083:
             scores[ExpressionLabel.SAD] += 0.6
-            if mouth_open < 5: scores[ExpressionLabel.SAD] += 0.2
-        if brow_avg < -0.5:
-            anger_score = min(1.0, abs(brow_avg) / 3)
+            if mouth_open < 0.083: scores[ExpressionLabel.SAD] += 0.2
+        if brow_avg < -0.0083:
+            anger_score = min(1.0, abs(brow_avg) / 0.05)
             scores[ExpressionLabel.ANGRY] += anger_score * 0.7
-            if mouth_width < 50: scores[ExpressionLabel.ANGRY] += 0.15
-        if brow_diff > 3.5 and abs(yaw) > 8: scores[ExpressionLabel.CONFUSED] += 0.7
-        if brow_diff > 3.0 and abs(yaw) > 5: scores[ExpressionLabel.THINKING] += 0.5
-        if ear_avg > 0.30 and mouth_open > 5 and mouth_open < 15 and brow_avg > 1.0: scores[ExpressionLabel.FEARFUL] += 0.6
-        if mouth_open > 3 and mouth_open < 10 and brow_avg < 0.3 and brow_avg > -0.5: scores[ExpressionLabel.DISGUSTED] += 0.5
+            if mouth_width < 0.83: scores[ExpressionLabel.ANGRY] += 0.15
+        if brow_diff > 0.058 and abs(yaw) > 0.13: scores[ExpressionLabel.CONFUSED] += 0.7
+        if brow_diff > 0.05 and abs(yaw) > 0.083: scores[ExpressionLabel.THINKING] += 0.5
+        if ear_avg > 0.30 and 0.083 < mouth_open < 0.25 and brow_avg > 0.017: scores[ExpressionLabel.FEARFUL] += 0.6
+        if 0.05 < mouth_open < 0.17 and -0.0083 < brow_avg < 0.005: scores[ExpressionLabel.DISGUSTED] += 0.5
         if all(v < 0.3 for v in scores.values()): scores[ExpressionLabel.NEUTRAL] = 0.5
-        if mouth_open < 5: scores[ExpressionLabel.NEUTRAL] += 0.3
-        if -0.5 < brow_avg < 1.0: scores[ExpressionLabel.NEUTRAL] += 0.2
+        if mouth_open < 0.083: scores[ExpressionLabel.NEUTRAL] += 0.3
+        if -0.0083 < brow_avg < 0.017: scores[ExpressionLabel.NEUTRAL] += 0.2
 
         total = sum(scores.values()) + 1e-6
         prob_dict = {k: v / total for k, v in scores.items()}
@@ -428,7 +434,13 @@ class PyTorchExpressionClassifier:
 
 
 class AssistiveExpressionMapper:
-    """Map expressions to assistive communication intents."""
+    """Map expressions to assistive communication intents.
+
+    An intent is only *confirmed* after the same intent is seen for
+    ``confirm_frames`` consecutive frames at ``min_confidence`` or above.
+    This dwell requirement prevents single-frame misclassifications from
+    triggering YES/NO/HELP/PAIN announcements. NEUTRAL is never confirmed.
+    """
 
     INTENT_MAP = {
         ExpressionLabel.HAPPY: ExpressionLabel.YES,
@@ -441,20 +453,24 @@ class AssistiveExpressionMapper:
         ExpressionLabel.THINKING: ExpressionLabel.NEUTRAL,
     }
 
-    def __init__(self):
+    def __init__(self, confirm_frames: int = 10, min_confidence: float = 0.5):
         self.intent_history = deque(maxlen=10)
+        self.confirm_frames = max(1, confirm_frames)
+        self.min_confidence = min_confidence
+        self.pending: Optional[ExpressionLabel] = None
+        self.pending_count: int = 0
+        self.confirmed: Optional[ExpressionLabel] = None
 
     def map_to_intent(self, result: ExpressionResult) -> ExpressionResult:
         """Map expression to communication intent (does not mutate the input)."""
         label = result.label
         features = result.features
-        brow_up = features.get('left_brow_height', 0) > 0.5 or features.get('right_brow_height', 0) > 0.5
-        mouth_open = features.get('mouth_open', 0) > 8.0
+        # Thresholds in scale-normalized units (fractions of inter-eye distance).
+        brow_up = features.get('left_brow_height', 0) > 0.0083 or features.get('right_brow_height', 0) > 0.0083
+        mouth_open = features.get('mouth_open', 0) > 0.13
         mouth_width = features.get('mouth_width', 0)
-        mouth_corner_down = mouth_width < 48.0
         eye_wide = features.get('ear_avg', 0) > 0.26
-        brow_furrow = features.get('left_brow_height', 0) < -0.3 or features.get('right_brow_height', 0) < -0.3
-        pitch = features.get('pitch', 0)
+        brow_furrow = features.get('left_brow_height', 0) < -0.005 or features.get('right_brow_height', 0) < -0.005
 
         if label in (ExpressionLabel.HAPPY, ExpressionLabel.YES):
             intent = ExpressionLabel.YES
@@ -473,14 +489,42 @@ class AssistiveExpressionMapper:
         else:
             intent = ExpressionLabel.NEUTRAL
 
+        self.intent_history.append(intent)
+
+        # Dwell confirmation: hold the same actionable intent long enough.
+        is_actionable = intent != ExpressionLabel.NEUTRAL
+        confident = result.confidence >= self.min_confidence
+        if is_actionable and confident and intent == self.pending:
+            self.pending_count += 1
+        elif is_actionable and confident:
+            self.pending = intent
+            self.pending_count = 1
+        else:
+            self.pending = None
+            self.pending_count = 0
+
+        is_confirmed = (
+            self.pending is not None
+            and self.pending_count >= self.confirm_frames
+        )
+        if is_confirmed:
+            self.confirmed = self.pending
+
         intent_result = ExpressionResult(
             label=intent,
             confidence=result.confidence,
             probabilities=result.probabilities,
             features=result.features,
+            confirmed=is_confirmed,
         )
-        self.intent_history.append(intent)
         return intent_result
+
+    def reset(self):
+        """Clear pending/confirmed intent state (e.g. after acknowledgement)."""
+        self.intent_history.clear()
+        self.pending = None
+        self.pending_count = 0
+        self.confirmed = None
 
 
 # --- Factory Functions ---
@@ -505,6 +549,8 @@ def create_classifier(
     return clf
 
 
-def create_mapper() -> AssistiveExpressionMapper:
+def create_mapper(confirm_frames: int = 10, min_confidence: float = 0.5) -> AssistiveExpressionMapper:
     """Factory function to create an intent mapper."""
-    return AssistiveExpressionMapper()
+    return AssistiveExpressionMapper(
+        confirm_frames=confirm_frames, min_confidence=min_confidence
+    )

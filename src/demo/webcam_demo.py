@@ -57,6 +57,8 @@ class WebcamDemo:
         show_fps: bool = True,
         model_type: str = "rf",
         mirror: bool = True,
+        confirm_frames: int = 10,
+        min_confidence: float = 0.5,
     ):
         self.window_name = window_name
         self.show_landmarks = show_landmarks
@@ -74,7 +76,9 @@ class WebcamDemo:
         )
 
         self.classifier = self._load_classifier(model_path, model_type)
-        self.intent_mapper = create_mapper()
+        self.intent_mapper = create_mapper(
+            confirm_frames=confirm_frames, min_confidence=min_confidence
+        )
         self.occlusion_handler = RobustOcclusionHandler()
         self.camera_id = camera_id
         self.cap = None
@@ -221,11 +225,21 @@ class WebcamDemo:
                 symbol = INTENT_SYMBOLS[intent.label]
                 color = EXPRESSION_COLORS.get(intent.label, (255, 255, 255))
                 box_x, box_y, box_w, box_h = w - 200, 20, 180, 80
-                cv2.rectangle(display, (box_x, box_y), (box_x + box_w, box_y + box_h), color, -1)
+                if intent.confirmed:
+                    # Confirmed: solid box, bare symbol.
+                    cv2.rectangle(display, (box_x, box_y), (box_x + box_w, box_y + box_h), color, -1)
+                    text_color = (0, 0, 0)
+                    caption = "CONFIRMED"
+                else:
+                    # Pending: hollow box, symbol with "?" while dwell builds.
+                    cv2.rectangle(display, (box_x, box_y), (box_x + box_w, box_y + box_h), color, 2)
+                    symbol = symbol + "?"
+                    text_color = color
+                    caption = "HOLD IT..."
                 cv2.putText(display, symbol, (box_x + 10, box_y + 55),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3)
-                cv2.putText(display, "INTENT", (box_x + 10, box_y + 75),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, text_color, 3)
+                cv2.putText(display, caption, (box_x + 10, box_y + 75),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, text_color, 1)
 
         if result['occlusion'] and result['occlusion'].is_occluded:
             cv2.putText(display, f"Occlusion: {result['occlusion'].occluded_regions}",
@@ -260,6 +274,8 @@ def main():
     parser.add_argument("--no-intent", action="store_true")
     parser.add_argument("--model-type", type=str, default="rf")
     parser.add_argument("--no-mirror", action="store_true", help="Disable selfie-view mirroring")
+    parser.add_argument("--confirm-frames", type=int, default=10, help="Frames to hold an intent before confirming it")
+    parser.add_argument("--min-confidence", type=float, default=0.5, help="Minimum expression confidence that counts toward confirmation")
     args = parser.parse_args()
 
     demo = WebcamDemo(
@@ -270,6 +286,8 @@ def main():
         show_intent=not args.no_intent,
         model_type=args.model_type,
         mirror=not args.no_mirror,
+        confirm_frames=args.confirm_frames,
+        min_confidence=args.min_confidence,
     )
     demo.start()
 

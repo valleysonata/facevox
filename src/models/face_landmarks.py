@@ -192,19 +192,36 @@ class MediaPipeFaceLandmarker:
         return annotated
 
     def extract_features(self, landmarks: FaceLandmarks) -> Dict[str, float]:
-        """Extract geometric features for expression recognition."""
+        """Extract scale-invariant geometric features for expression recognition.
+
+        All distance features are normalized by the inter-eye distance, so
+        they are unitless and independent of camera resolution and how far
+        the user sits from the camera. Eye aspect ratios are already ratios.
+        """
         lm = landmarks.landmarks
         features = {}
+
+        # Scale reference: distance between eye centers (pixels).
+        left_eye = lm[self.LEFT_EYE]
+        right_eye = lm[self.RIGHT_EYE]
+        left_center = np.mean(left_eye[:, :2], axis=0)
+        right_center = np.mean(right_eye[:, :2], axis=0)
+        scale = float(np.linalg.norm(right_center - left_center))
+        if scale < 1e-6:
+            scale = 1.0
+
+        def norm(value: float) -> float:
+            return float(value) / scale
 
         # Mouth opening (vertical distance between upper/lower lip landmarks)
         upper_lip = lm[13]
         lower_lip = lm[14]
-        features['mouth_open'] = float(np.linalg.norm(upper_lip[:2] - lower_lip[:2]))
+        features['mouth_open'] = norm(float(np.linalg.norm(upper_lip[:2] - lower_lip[:2])))
 
         # Mouth width (distance between corners of mouth)
         left_corner = lm[61]
         right_corner = lm[291]
-        features['mouth_width'] = float(np.linalg.norm(left_corner[:2] - right_corner[:2]))
+        features['mouth_width'] = norm(float(np.linalg.norm(left_corner[:2] - right_corner[:2])))
 
         # Lip height (average of inner lip distances)
         lip_heights = []
@@ -212,9 +229,9 @@ class MediaPipeFaceLandmarker:
             upper = lm[self.LIPS_INNER[i]]
             lower = lm[self.LIPS_INNER[-(i + 1)]]
             lip_heights.append(float(np.linalg.norm(upper[:2] - lower[:2])))
-        features['lip_height_avg'] = float(np.mean(lip_heights)) if lip_heights else 0.0
+        features['lip_height_avg'] = norm(float(np.mean(lip_heights)) if lip_heights else 0.0)
 
-        # Eye features (Eye Aspect Ratio)
+        # Eye features (Eye Aspect Ratio — already scale-invariant)
         left_eye = lm[self.LEFT_EYE]
         right_eye = lm[self.RIGHT_EYE]
 
@@ -236,17 +253,17 @@ class MediaPipeFaceLandmarker:
         left_brow_top = float(np.mean(left_brow[:, 1]))
         right_brow_top = float(np.mean(right_brow[:, 1]))
 
-        features['left_brow_height'] = float(left_eye_top - left_brow_top)
-        features['right_brow_height'] = float(right_eye_top - right_brow_top)
+        features['left_brow_height'] = norm(float(left_eye_top - left_brow_top))
+        features['right_brow_height'] = norm(float(right_eye_top - right_brow_top))
 
-        # Head pose approximation
+        # Head pose approximation (normalized by face scale)
         nose_tip = lm[1]
         chin = lm[152]
         left_cheek = lm[234]
         right_cheek = lm[454]
 
-        features['pitch'] = float(nose_tip[1] - chin[1])
-        features['yaw'] = float(right_cheek[0] - left_cheek[0])
+        features['pitch'] = norm(float(nose_tip[1] - chin[1]))
+        features['yaw'] = norm(float(right_cheek[0] - left_cheek[0]))
 
         return features
 

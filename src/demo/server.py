@@ -70,6 +70,7 @@ class ExpressionResponse(BaseModel):
     confidence: float
     intent: str
     intent_confidence: float
+    intent_confirmed: bool = False
     occluded: bool
     features: dict
 
@@ -188,6 +189,7 @@ def _process_frame(frame: np.ndarray) -> ExpressionResponse:
             confidence=0.0,
             intent="neutral",
             intent_confidence=0.0,
+            intent_confirmed=False,
             occluded=False,
             features={},
         )
@@ -214,6 +216,7 @@ def _process_frame(frame: np.ndarray) -> ExpressionResponse:
         confidence=expression_confidence,
         intent=intent.label.value,
         intent_confidence=intent.confidence,
+        intent_confirmed=intent.confirmed,
         occluded=occlusion.is_occluded,
         features=features,
     )

@@ -46,6 +46,8 @@ Examples:
     demo_parser.add_argument("--no-intent", action="store_true", help="Hide intent")
     demo_parser.add_argument("--model-type", type=str, default="rf", help="Model type (rf, transformer, temporal, occlusion_aware)")
     demo_parser.add_argument("--no-mirror", action="store_true", help="Disable selfie-view mirroring")
+    demo_parser.add_argument("--confirm-frames", type=int, default=10, help="Frames to hold an intent before confirming it")
+    demo_parser.add_argument("--min-confidence", type=float, default=0.5, help="Minimum expression confidence that counts toward confirmation")
 
     # GUI command
     gui_parser = subparsers.add_parser("gui", help="Run with GUI")
@@ -86,6 +88,8 @@ Examples:
             show_intent=not args.no_intent,
             model_type=args.model_type,
             mirror=not args.no_mirror,
+            confirm_frames=args.confirm_frames,
+            min_confidence=args.min_confidence,
         )
         demo.start()
 
