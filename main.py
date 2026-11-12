@@ -5,7 +5,6 @@ Main entry point for the application.
 """
 
 import argparse
-import sys
 import os
 import json
 
@@ -44,7 +43,7 @@ Examples:
     demo_parser.add_argument("--no-landmarks", action="store_true", help="Hide landmarks")
     demo_parser.add_argument("--no-expression", action="store_true", help="Hide expression")
     demo_parser.add_argument("--no-intent", action="store_true", help="Hide intent")
-    demo_parser.add_argument("--model-type", type=str, default="rf", help="Model type (rf, transformer, temporal, occlusion_aware)")
+    demo_parser.add_argument("--model-type", choices=["rf", "gb", "transformer", "temporal", "occlusion_aware"], default="rf", help="Classifier type")
     demo_parser.add_argument("--no-mirror", action="store_true", help="Disable selfie-view mirroring")
     demo_parser.add_argument("--confirm-frames", type=int, default=10, help="Frames to hold an intent before confirming it")
     demo_parser.add_argument("--min-confidence", type=float, default=0.5, help="Minimum expression confidence that counts toward confirmation")

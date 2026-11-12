@@ -4,10 +4,8 @@ import time
 import numpy as np
 import cv2
 from typing import List, Tuple, Dict, Optional
-from tqdm import tqdm
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
-import mediapipe as mp
 
 from src.models.face_landmarks import MediaPipeFaceLandmarker, normalize_landmarks
 from src.models.expression_recognition import (
